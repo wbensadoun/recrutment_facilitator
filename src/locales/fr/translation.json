@@ -1,0 +1,88 @@
+{
+  "common": {
+    "add": "Ajouter",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "close": "Fermer",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "confirm": "Confirmer",
+    "search": "Rechercher"
+  },
+  "auth": {
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "email": "Email",
+    "password": "Mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "resetPassword": "Réinitialiser le mot de passe",
+    "loginButton": "Se connecter",
+    "loggingIn": "Connexion en cours...",
+    "invalidCredentials": "Email ou mot de passe invalide"
+  },
+  "candidates": {
+    "title": "Candidats",
+    "add": "Ajouter un candidat",
+    "edit": "Modifier le candidat",
+    "delete": "Supprimer le candidat",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "email": "Email",
+    "phone": "Téléphone",
+    "position": "Poste",
+    "experience": "Expérience",
+    "status": "Statut",
+    "stage": "Étape",
+    "cv": "CV",
+    "uploadCV": "Télécharger le CV",
+    "assignedRecruiter": "Recruteur assigné",
+    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce candidat ?"
+  },
+  "recruiters": {
+    "title": "Recruteurs",
+    "add": "Ajouter un recruteur",
+    "edit": "Modifier le recruteur",
+    "delete": "Supprimer le recruteur",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "email": "Email",
+    "status": "Statut",
+    "active": "Actif",
+    "inactive": "Inactif",
+    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce recruteur ?"
+  },
+  "pipeline": {
+    "title": "Pipeline",
+    "stages": {
+      "softSkills": "Soft Skills",
+      "technicalInterview": "Entretien Technique",
+      "clientMeeting": "Rencontre Client",
+      "finalDecision": "Décision Finale"
+    },
+    "addStage": "Ajouter une étape",
+    "editStage": "Modifier l'étape",
+    "deleteStage": "Supprimer l'étape",
+    "moveCandidates": "Déplacer les candidats"
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "welcome": "Bienvenue",
+    "todayInterviews": "Entretiens du jour",
+    "upcomingInterviews": "Next interviews",
+    "recentCandidates": "Candidats récents",
+    "statistics": "Statistics"
+  },
+  "errors": {
+    "required": "Ce champ est requis",
+    "invalidEmail": "Adresse email invalide",
+    "networkError": "Erreur réseau. Veuillez vérifier votre connexion",
+    "serverError": "Une erreur serveur est survenue",
+    "unauthorized": "Accès non autorisé",
+    "forbidden": "Accès interdit",
+    "notFound": "Ressource non trouvée",
+    "unknown": "Une erreur inconnue est survenue"
+  }
+}

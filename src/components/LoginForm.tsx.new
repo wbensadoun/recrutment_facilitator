@@ -1,0 +1,165 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { useContext } from 'react';
+import { AuthContext } from '@/contexts/AuthContext';
+
+const LoginForm = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const authContext = useContext(AuthContext);
+  if (!authContext) return null; // Do not render if context is not available
+  const { login } = authContext;
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const success = await login(email, password);
+    setLoading(false);
+    
+    // Redirect to home page if login is successful
+    if (success) {
+      navigate('/');
+    }
+  };
+
+  const handleQuickLogin = (testEmail: string, testPassword: string) => {
+    // Only fill the fields without submitting the form
+    setEmail(testEmail);
+    setPassword(testPassword);
+    
+    // Focus on the login button to indicate to the user that they can click on it
+    setTimeout(() => {
+      const submitButton = document.querySelector('button[type="submit"]');
+      if (submitButton) {
+        (submitButton as HTMLButtonElement).focus();
+      }
+    }, 100);
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold">Login</CardTitle>
+          <CardDescription>
+            Access your recruitment platform
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin.test@example.com"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Your password"
+                required
+              />
+            </div>
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Logging in...' : 'Log in'}
+            </Button>
+          </form>
+
+          <div className="mt-6 text-sm text-gray-600">
+            <p className="font-semibold mb-3">Available test accounts:</p>
+            <div className="space-y-2">
+              <div className="p-2 bg-gray-50 rounded">
+                <p className="font-medium">Main Admin</p>
+                <p className="text-xs">Email: admin.test</p>
+                <p className="text-xs">Password: admin123</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-1"
+                  onClick={() => handleQuickLogin('admin.test', 'admin123')}
+                >
+                  Quick Login
+                </Button>
+              </div>
+              
+              <div className="p-2 bg-gray-50 rounded">
+                <p className="font-medium">Main Recruiter</p>
+                <p className="text-xs">Email: recruteur</p>
+                <p className="text-xs">Password: recrut123</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-1"
+                  onClick={() => handleQuickLogin('recruteur', 'recrut123')}
+                >
+                  Quick Login
+                </Button>
+              </div>
+              
+              <div className="p-2 bg-gray-50 rounded">
+                <p className="font-medium">Marie Dupont (Recruiter)</p>
+                <p className="text-xs">Email: marie.dupont</p>
+                <p className="text-xs">Password: marie123</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-1"
+                  onClick={() => handleQuickLogin('marie.dupont', 'marie123')}
+                >
+                  Quick Login
+                </Button>
+              </div>
+              
+              <div className="p-2 bg-gray-50 rounded">
+                <p className="font-medium">Pierre Martin (Recruiter)</p>
+                <p className="text-xs">Email: pierre.martin</p>
+                <p className="text-xs">Password: pierre123</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-1"
+                  onClick={() => handleQuickLogin('pierre.martin', 'pierre123')}
+                >
+                  Quick Login
+                </Button>
+              </div>
+              
+              <div className="p-2 bg-gray-50 rounded">
+                <p className="font-medium">Sophie Bernard (Recruiter)</p>
+                <p className="text-xs">Email: sophie.bernard</p>
+                <p className="text-xs">Password: sophie123</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-1"
+                  onClick={() => handleQuickLogin('sophie.bernard', 'sophie123')}
+                >
+                  Quick Login
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default LoginForm;
