@@ -87,66 +87,78 @@ export const useRecruiterPermissions = () => {
     }
   };
 
+  /**
+   * Sauvegarde (insère ou met à jour) les permissions pour un ou plusieurs recruteurs.
+   * @param permissions Un tableau d'objets de permission.
+   * Chaque objet doit contenir le user_id et les booléens de permission.
+   */
   const saveRecruiterPermissions = async (permissions: RecruiterPermission[]) => {
+    if (!permissions || permissions.length === 0) {
+      console.log("Aucune permission à sauvegarder.");
+      return;
+    }
+
     try {
-      // Récupérer tous les enregistrements existants
-      const existingItems = await supabase
-        .from('recruiter_permissions')
-        .select('*');
-      
-      // Vérifier si la réponse est valide
-      if (!existingItems) {
-        throw new Error('Failed to fetch existing permissions');
-      }
-      
-      // Type guard pour vérifier la structure des données
-      const isValidItem = (item: any): item is { id: string } => {
-        return item && typeof item === 'object' && 'id' in item;
-      };
-      
-      // Convertir en tableau et filtrer les éléments invalides
-      const itemsToProcess = (Array.isArray(existingItems) 
-        ? existingItems 
-        : [existingItems])
-        .filter(isValidItem);
-      
-      // Supprimer les éléments un par un (sauf l'ID spécial)
-      for (const item of itemsToProcess) {
-        if (item.id !== '00000000-0000-0000-0000-000000000000') {
+      // Pour chaque permission à mettre à jour
+      for (const perm of permissions) {
+        const permissionData = {
+          user_id: parseInt(perm.recruiterId, 10),
+          view_candidates: perm.permissions.includes('view_candidates'),
+          create_candidates: perm.permissions.includes('create_candidates'),
+          modify_candidates: perm.permissions.includes('edit_candidates'),
+          view_interviews: perm.permissions.includes('view_interviews'),
+          create_interviews: perm.permissions.includes('create_interviews'),
+          modify_interviews: perm.permissions.includes('edit_interviews'),
+          modify_statuses: perm.permissions.includes('change_status'),
+          modify_stages: perm.permissions.includes('change_stage'),
+          updated_at: new Date().toISOString()
+        };
+
+        // Vérifier si l'entrée existe déjà en utilisant single()
+        const { data: existingData } = await supabase
+          .from('recruiter_rights')
+          .select()
+          .eq('user_id', permissionData.user_id)
+          .single();
+
+        const exists = existingData !== null;
+
+        if (exists) {
+          // Mise à jour si l'entrée existe
           await supabase
-            .from('recruiter_permissions')
-            .delete()
-            .eq('id', item.id);
+            .from('recruiter_rights')
+            .update(permissionData)
+            .eq('user_id', permissionData.user_id);
+        } else {
+          // Insertion si l'entrée n'existe pas
+          await supabase
+            .from('recruiter_rights')
+            .insert([permissionData]);
         }
       }
 
-      // Insérer les nouvelles permissions
-      const dataToInsert = permissions.map(perm => ({
-        recruiter_id: perm.recruiterId,
-        permissions: perm.permissions
-      }));
+      // Récupérer les données mises à jour
+      const { data } = await supabase
+        .from('recruiter_rights')
+        .select()
+        .order('user_id', { ascending: true });
 
-      if (dataToInsert.length > 0) {
-        const { error: insertError } = await supabase
-          .from('recruiter_permissions')
-          .insert(dataToInsert)
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-      }
-
+      console.log('Permissions sauvegardées avec succès :', data);
+      
       toast({
-        title: "Permissions updated",
-        description: "Permissions have been successfully updated",
+        title: "Permissions mises à jour",
+        description: "Les permissions ont été mises à jour avec succès",
       });
 
+      // Rafraîchir les données
       await fetchRecruiterPermissions();
+      
+      return data;
     } catch (error) {
-      console.error('Error saving recruiter permissions:', error);
+      console.error('Erreur lors de la sauvegarde des permissions :', error);
       toast({
-        title: "Error",
-        description: "Failed to update permissions",
+        title: "Erreur",
+        description: "Impossible de sauvegarder les permissions",
         variant: "destructive",
       });
     }

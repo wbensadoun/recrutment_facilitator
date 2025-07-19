@@ -37,20 +37,6 @@ const LoginForm = () => {
     }
   };
 
-  const handleQuickLogin = (testEmail: string, testPassword: string) => {
-    // Only fill the fields without submitting the form
-    setEmail(testEmail);
-    setPassword(testPassword);
-    
-    // Focus on the login button to indicate to the user that they can click on it
-    setTimeout(() => {
-      const submitButton = document.querySelector('button[type="submit"]');
-      if (submitButton) {
-        (submitButton as HTMLButtonElement).focus();
-      }
-    }, 100);
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <Card className="w-full max-w-md">
@@ -69,7 +55,7 @@ const LoginForm = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin.test@example.com"
+                placeholder="your.email@example.com"
                 required
               />
             </div>
@@ -98,39 +84,6 @@ const LoginForm = () => {
               {loading ? 'Logging in...' : 'Log in'}
             </Button>
           </form>
-
-          <div className="mt-6 text-sm text-gray-600">
-            <p className="font-semibold mb-3">Available test accounts:</p>
-            <div className="space-y-2">
-              <div className="p-2 bg-gray-50 rounded">
-                <p className="font-medium">Admin Account</p>
-                <p className="text-xs">Email: admin.test@alenia.io</p>
-                <p className="text-xs">Password: admin123</p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="mt-1"
-                  onClick={() => handleQuickLogin('admin.test@alenia.io', 'admin123')}
-                >
-                  Quick Login
-                </Button>
-              </div>
-              
-              <div className="p-2 bg-gray-50 rounded">
-                <p className="font-medium">Recruiter Account</p>
-                <p className="text-xs">Email: marie.dupont@example.com</p>
-                <p className="text-xs">Password: temp123</p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="mt-1"
-                  onClick={() => handleQuickLogin('marie.dupont@example.com', 'temp123')}
-                >
-                  Quick Login
-                </Button>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
       

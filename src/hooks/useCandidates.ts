@@ -76,7 +76,7 @@ export const useCandidates = () => {
       lastname: candidate.lastname,
       email: candidate.email,
       position: candidate.position || 'Non spécifié',
-      pipeline_stage_id: candidate.pipeline_stage_id,
+      current_stage: candidate.current_stage,
       status: status
     });
   };
@@ -89,8 +89,8 @@ export const useCandidates = () => {
         throw new Error('Candidat non trouvé');
       }
 
-      // Mettre à jour le candidat avec le nouveau pipeline_stage_id
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api'}/candidates/${candidateId}`, {
+      // Mettre à jour le candidat avec le nouveau current_stage
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/candidates/${candidateId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -23,7 +23,8 @@ export interface Candidate {
   phone?: string;
   position: string;
   experience?: string;
-  pipeline_stage_id: number; // Correspond à l'ID de la table pipeline_stages
+  current_stage: string; // Nouveau champ pour stocker l'ID de l'étape actuelle
+  pipeline_stage_id?: number; // Ancien champ marqué comme optionnel pour la rétrocompatibilité
   status: CandidateStatus;
   cv_url?: string;
   recruiter_id?: number;

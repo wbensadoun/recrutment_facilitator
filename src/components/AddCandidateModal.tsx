@@ -75,6 +75,7 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
       phone: '',
       position: '',
       experience: '',
+      salary_expectation: '',
       cv: null
     });
     
@@ -146,7 +147,8 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
               <Label htmlFor="experience" className="text-right">
                 Expérience (années)
               </Label>
-              <Select onValueChange={(value) => handleInputChange('experience', value)} className="col-span-3">
+              <div className="col-span-3">
+                <Select onValueChange={(value) => handleInputChange('experience', value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Années d'expérience" />
                 </SelectTrigger>
@@ -157,7 +159,8 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
                   <SelectItem value="6-10">6-10 ans</SelectItem>
                   <SelectItem value="10+">10+ ans</SelectItem>
                 </SelectContent>
-              </Select>
+                </Select>
+              </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="salary_expectation" className="text-right">

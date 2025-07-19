@@ -288,7 +288,7 @@ app.put('/api/user/change-password', async (req, res) => {
 app.get('/api/recruiters', async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM users WHERE role = 'recruiter' ORDER BY lastname, firstname"
+      "SELECT * FROM users WHERE role = 'recruiter' AND status = 'active' ORDER BY lastname, firstname"
     );
     res.json(result.rows);
   } catch (error) {
