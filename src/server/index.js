@@ -3,22 +3,59 @@ require('pg').defaults.ssl = false;
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const nodemailer = require('nodemailer');
-
 const bcrypt = require('bcrypt');
 
 const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10; // For bcrypt
 
-// Configuration de la base de données
+// Configuration CORS
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Configuration multer pour l'upload de fichiers
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = 'uploads/';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const candidateId = req.params.id;
+    const timestamp = Date.now();
+    const extension = path.extname(file.originalname);
+    cb(null, `cv_${candidateId}_${timestamp}${extension}`);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Seuls les fichiers PDF sont acceptés'), false);
+    }
+  }
+});
+
+// Configuration de la base de données PostgreSQL
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  user: process.env.POSTGRES_USER || 'postgres',
-  host: process.env.POSTGRES_HOST || 'localhost',
-  database: process.env.POSTGRES_DB || 'recruitment_facilitator',
-  password: process.env.POSTGRES_PASSWORD || 'postgres',
-  port: process.env.POSTGRES_PORT || 5432,
+  user: process.env.DB_USER || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
+  database: process.env.DB_NAME || 'recruitment_db',
+  password: process.env.DB_PASSWORD || 'password',
+  port: process.env.DB_PORT || 5432,
 });
 
 // Test de connexion à la base de données
@@ -946,7 +983,165 @@ app.delete('/api/pipeline-stages/:id', async (req, res) => {
   }
 });
 
+// Mettre à jour les droits d'un recruteur
+app.put('/api/recruiter-rights/:user_id', async (req, res) => {
+  const { user_id } = req.params;
+  const {
+    view_candidates,
+    create_candidates,
+    modify_candidates,
+    view_interviews,
+    create_interviews,
+    modify_interviews,
+    modify_statuses,
+    modify_stages
+  } = req.body;
+
+  console.log(`PUT /api/recruiter-rights/${user_id} - Request params:`, req.params);
+  console.log(`PUT /api/recruiter-rights/${user_id} - Request body:`, req.body);
+
+  try {
+    // Vérifier si la ligne existe déjà
+    const check = await pool.query('SELECT * FROM recruiter_rights WHERE user_id = $1', [user_id]);
+    let result;
+    if (check.rows.length > 0) {
+      // Update
+      result = await pool.query(
+        `UPDATE recruiter_rights SET
+          view_candidates = $1,
+          create_candidates = $2,
+          modify_candidates = $3,
+          view_interviews = $4,
+          create_interviews = $5,
+          modify_interviews = $6,
+          modify_statuses = $7,
+          modify_stages = $8,
+          updated_at = NOW()
+        WHERE user_id = $9 RETURNING *`,
+        [
+          view_candidates,
+          create_candidates,
+          modify_candidates,
+          view_interviews,
+          create_interviews,
+          modify_interviews,
+          modify_statuses,
+          modify_stages,
+          user_id
+        ]
+      );
+      console.log('Recruiter rights updated:', result.rows[0]);
+    } else {
+      // Insert
+      result = await pool.query(
+        `INSERT INTO recruiter_rights (
+          user_id, view_candidates, create_candidates, modify_candidates, view_interviews, create_interviews, modify_interviews, modify_statuses, modify_stages, created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW()) RETURNING *`,
+        [
+          user_id,
+          view_candidates,
+          create_candidates,
+          modify_candidates,
+          view_interviews,
+          create_interviews,
+          modify_interviews,
+          modify_statuses,
+          modify_stages
+        ]
+      );
+      console.log('Recruiter rights inserted:', result.rows[0]);
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating recruiter rights:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Récupérer tous les droits des recruteurs
+app.get('/api/recruiter-rights', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM recruiter_rights');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching recruiter rights:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Démarrer le serveur
 app.listen(port, () => {
   console.log(`✅ Serveur API démarré sur http://localhost:${port}`);
 });
+
+// Mettre à jour un statut candidat (nom et activation)
+app.put('/api/candidate-status/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, is_active } = req.body;
+  console.log(`[CANDIDATE STATUS] PUT /api/candidate-status/${id} - Body:`, req.body);
+  try {
+    const query = 'UPDATE candidate_statuses SET name = $1, is_active = $2, updated_at = NOW() WHERE id = $3 RETURNING *';
+    console.log('[CANDIDATE STATUS] SQL:', query, [name, is_active, id]);
+    const result = await pool.query(query, [name, is_active, id]);
+    if (result.rows.length === 0) {
+      console.log('[CANDIDATE STATUS] Not found for id:', id);
+      return res.status(404).json({ error: 'Status not found' });
+    }
+    console.log('[CANDIDATE STATUS] Updated:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating candidate status:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Récupérer tous les statuts candidats
+app.get('/api/candidate-status', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM candidate_statuses');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching candidate statuses:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Upload CV pour un candidat
+app.post('/api/candidates/:id/cv', upload.single('cv'), async (req, res) => {
+  try {
+    const candidateId = req.params.id;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'Aucun fichier fourni' });
+    }
+
+    console.log('[CV UPLOAD] Upload pour candidat:', candidateId);
+    console.log('[CV UPLOAD] Fichier:', req.file.filename);
+
+    // Construire l'URL du fichier
+    const cvUrl = `/uploads/${req.file.filename}`;
+
+    // Mettre à jour le candidat avec l'URL du CV
+    const result = await pool.query(
+      'UPDATE candidates SET cv_url = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [cvUrl, candidateId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Candidat non trouvé' });
+    }
+
+    console.log('[CV UPLOAD] CV mis à jour pour candidat:', candidateId);
+    res.json({ 
+      message: 'CV uploadé avec succès',
+      cv_url: cvUrl,
+      candidate: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[CV UPLOAD] Erreur:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'upload du CV' });
+  }
+});
+
+// Servir les fichiers uploadés
+app.use('/uploads', express.static('uploads'));
