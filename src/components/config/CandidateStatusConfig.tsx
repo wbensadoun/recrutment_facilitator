@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { api } from '@/services/api';
+import { useEffect } from 'react';
 
 interface CandidateStatus {
   id: string;
@@ -70,16 +72,31 @@ const CandidateStatusConfig = () => {
     setNewStatus({ name: status.name, color: status.color });
   };
 
-  const handleUpdateStatus = () => {
+  const fetchStatuses = async () => {
+    try {
+      const data = await api.candidateStatus.getAll();
+      setStatuses(data);
+    } catch (error) {
+      console.error('[FRONT] fetchStatuses - Erreur:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchStatuses();
+  }, []);
+
+  const handleUpdateStatus = async () => {
     if (!editingStatus || !newStatus.name) return;
-    
-    setStatuses(statuses.map(status => 
-      status.id === editingStatus.id 
-        ? { ...status, name: newStatus.name, color: newStatus.color }
-        : status
-    ));
-    setEditingStatus(null);
-    setNewStatus({ name: '', color: 'blue' });
+    try {
+      console.log('[FRONT] handleUpdateStatus - id:', editingStatus.id, 'nouveau nom:', newStatus.name);
+      await api.candidateStatus.update(editingStatus.id, { name: newStatus.name, is_active: editingStatus.isActive });
+      await fetchStatuses();
+      setEditingStatus(null);
+      setNewStatus({ name: '', color: 'blue' });
+    } catch (error) {
+      console.error('[FRONT] handleUpdateStatus - Erreur:', error);
+      alert('Erreur lors de la mise à jour du statut');
+    }
   };
 
   const handleDeleteStatus = (statusId: string) => {
@@ -94,12 +111,17 @@ const CandidateStatusConfig = () => {
     }
   };
 
-  const toggleStatusActive = (statusId: string) => {
-    setStatuses(statuses.map(status => 
-      status.id === statusId 
-        ? { ...status, isActive: !status.isActive }
-        : status
-    ));
+  const toggleStatusActive = async (statusId: string) => {
+    const status = statuses.find(s => s.id === statusId);
+    if (!status) return;
+    try {
+      console.log('[FRONT] toggleStatusActive - id:', statusId, 'état actuel:', status.isActive);
+      await api.candidateStatus.update(statusId, { name: status.name, is_active: !status.isActive });
+      await fetchStatuses();
+    } catch (error) {
+      console.error('[FRONT] toggleStatusActive - Erreur:', error);
+      alert('Erreur lors du changement d\'activation du statut');
+    }
   };
 
   return (
@@ -114,7 +136,7 @@ const CandidateStatusConfig = () => {
           <DialogTrigger asChild>
             <Button>
               <Plus className="w-4 h-4 mr-2" />
-              Ajouter un statut
+              Add status
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -186,20 +208,17 @@ const CandidateStatusConfig = () => {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  {!status.isDefault && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleStatusActive(status.id)}
-                    >
-                      {status.isActive ? 'Disable' : 'Enable'}
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggleStatusActive(status.id)}
+                  >
+                    {status.isActive ? 'Disable' : 'Enable'}
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleEditStatus(status)}
-                    disabled={status.isDefault}
                   >
                     <Edit className="w-4 h-4" />
                   </Button>
@@ -207,8 +226,8 @@ const CandidateStatusConfig = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => handleDeleteStatus(status.id)}
-                    disabled={status.isDefault}
                     className="text-red-600 hover:text-red-700 disabled:text-gray-400"
+                    disabled={status.isDefault}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>

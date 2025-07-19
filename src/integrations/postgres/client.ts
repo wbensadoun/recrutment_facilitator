@@ -334,5 +334,4 @@ class PostgresClient {
 // Exporter une instance du client PostgreSQL
 const postgres = new PostgresClient();
 
-// Pour faciliter la migration, nous exportons un alias 'supabase'
-export const supabase = postgres;
+// Nettoyage : suppression de l'alias supabase et de la simulation d'API Supabase

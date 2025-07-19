@@ -54,21 +54,20 @@ const InterviewStagesConfig = () => {
 
   const handleAddStage = async () => {
     if (!newStage.name) return;
-    
     try {
+      // Calculer le prochain stage_order
+      const nextOrder = stages.length > 0 ? Math.max(...stages.map(s => s.stage_order)) + 1 : 1;
       const stageData = {
         name: newStage.name,
         description: newStage.description,
-        stage_order: stages.length + 1,
+        stage_order: nextOrder,
         is_active: true
       };
-      
+      // Ne pas inclure de champ id ici !
       const response = await api.pipelineStages.add(stageData);
-      
       setStages([...stages, response]);
       setNewStage({ name: '', description: '' });
       setIsAddModalOpen(false);
-      
       toast({
         title: 'Success',
         description: 'Interview stage added successfully'

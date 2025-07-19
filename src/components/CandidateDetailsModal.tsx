@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { useCandidates } from '@/hooks/useCandidates';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
-import { Candidate, StageType, CandidateStatus } from '@/types/database';
+import { Candidate, CandidateStatus } from '@/types/database';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Download, FileText, ExternalLink, Upload } from 'lucide-react';
@@ -30,7 +30,7 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
     phone: string;
     position: string;
     experience: string;
-    current_stage: number;
+    current_stage: string;
     status: CandidateStatus;
   }>({
     firstname: '',
@@ -39,17 +39,17 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
     phone: '',
     position: '',
     experience: '',
-    current_stage: 0,
+    current_stage: '1',
     status: 'scheduled',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCVUpload, setShowCVUpload] = useState(false);
   const { toast } = useToast();
-  const { updateCandidateStatus, updateCandidateStage } = useCandidates();
+  const { updateCandidateStatus, updateCandidateStage, updateCandidate } = useCandidates();
   const { stages: pipelineStages, loading: stagesLoading } = usePipelineStages();
 
   useEffect(() => {
-    if (candidate && isOpen) {
+    if (candidate) {
       setFormData({
         firstname: candidate.firstname || '',
         lastname: candidate.lastname || '',
@@ -57,20 +57,20 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
         phone: candidate.phone || '',
         position: candidate.position || '',
         experience: candidate.experience || '',
-        current_stage: typeof candidate.current_stage === 'number' ? candidate.current_stage : 0,
+        current_stage: candidate.current_stage || '1',
         status: candidate.status || 'scheduled',
       });
     }
-  }, [candidate, isOpen]);
+  }, [candidate]);
 
   const handleStageChange = (candidateId: string | number, newStage: string) => {
-    const stageNumber = parseInt(newStage, 10);
     const candidateIdNum = typeof candidateId === 'string' ? parseInt(candidateId, 10) : candidateId;
+    const stageNumber = parseInt(newStage, 10);
     
-    if (!isNaN(stageNumber) && !isNaN(candidateIdNum)) {
+    if (!isNaN(candidateIdNum) && !isNaN(stageNumber)) {
       setFormData(prev => ({
         ...prev,
-        current_stage: stageNumber
+        current_stage: newStage
       }));
       
       // Mettre à jour l'étape du candidat via l'API
@@ -95,12 +95,29 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
     setIsSubmitting(true);
     
     try {
-      // Update status and stage if changed
+      // Préparer les données à mettre à jour
+      const updates: any = {};
+      
+      // Vérifier et ajouter les champs modifiés
+      if (formData.phone !== candidate.phone) {
+        updates.phone = formData.phone;
+      }
+      if (formData.position !== candidate.position) {
+        updates.position = formData.position;
+      }
+      if (formData.experience !== candidate.experience) {
+        updates.experience = formData.experience;
+      }
       if (formData.status !== candidate.status) {
-        await updateCandidateStatus(candidate.id, formData.status);
+        updates.status = formData.status;
       }
       if (formData.current_stage !== candidate.current_stage) {
-        handleStageChange(candidate.id.toString(), formData.current_stage.toString());
+        updates.current_stage = formData.current_stage;
+      }
+
+      // Mettre à jour via l'API si des changements ont été détectés
+      if (Object.keys(updates).length > 0) {
+        await updateCandidate(candidate.id, updates);
       }
       
       toast({
@@ -193,7 +210,6 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                     value={formData.firstname + ' ' + formData.lastname}
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                     readOnly
-                    className="bg-gray-50"
                   />
                 </div>
                 
@@ -204,7 +220,6 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                     readOnly
-                    className="bg-gray-50"
                   />
                 </div>
               </div>
@@ -216,8 +231,6 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                     id="phone"
                     value={formData.phone}
                     onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                    readOnly
-                    className="bg-gray-50"
                   />
                 </div>
                 
@@ -227,8 +240,6 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                     id="position"
                     value={formData.position}
                     onChange={(e) => setFormData(prev => ({ ...prev, position: e.target.value }))}
-                    readOnly
-                    className="bg-gray-50"
                   />
                 </div>
               </div>
@@ -240,8 +251,6 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                   value={formData.experience}
                   onChange={(e) => setFormData(prev => ({ ...prev, experience: e.target.value }))}
                   rows={3}
-                  readOnly
-                  className="bg-gray-50"
                 />
               </div>
 
@@ -249,7 +258,7 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                 <div className="space-y-2">
                   <Label htmlFor="stage">Current stage</Label>
                   <Select
-                    value={formData.current_stage.toString()}
+                    value={formData.current_stage}
                     onValueChange={(value) => handleStageChange(candidate.id, value)}
                     disabled={stagesLoading}
                   >
@@ -257,10 +266,14 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="soft_skills">Soft Skills</SelectItem>
-                      <SelectItem value="technical_interview">Technical Interview</SelectItem>
-                      <SelectItem value="client_meeting">Client Meeting</SelectItem>
-                      <SelectItem value="custom_stage">Custom Stage</SelectItem>
+                      <SelectItem value="1">Initial Contact</SelectItem>
+                      <SelectItem value="2">Screening</SelectItem>
+                      <SelectItem value="3">Technical Interview</SelectItem>
+                      <SelectItem value="4">HR Interview</SelectItem>
+                      <SelectItem value="5">Final Interview</SelectItem>
+                      <SelectItem value="6">Offer</SelectItem>
+                      <SelectItem value="7">Hired</SelectItem>
+                      <SelectItem value="8">Rejected</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -337,4 +337,97 @@ export const api = {
       return response.json();
     },
   },
+
+  recruiterRights: {
+    update: async (user_id: string, rights: {
+      view_candidates: boolean,
+      create_candidates: boolean,
+      modify_candidates: boolean,
+      view_interviews: boolean,
+      create_interviews: boolean,
+      modify_interviews: boolean,
+      modify_statuses: boolean,
+      modify_stages: boolean
+    }) => {
+      try {
+        console.log(`API: Envoi de la requête PUT à ${API_URL}/recruiter-rights/${user_id}`);
+        console.log('API: Données à envoyer:', rights);
+        const response = await fetch(`${API_URL}/recruiter-rights/${user_id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(rights),
+        });
+        console.log('API: Statut de la réponse:', response.status);
+        const data = await response.json();
+        console.log('API: Données reçues:', data);
+        if (!response.ok) {
+          console.error('API: Erreur lors de la mise à jour des droits:', data);
+          throw new Error(data.error || 'Impossible de mettre à jour les droits du recruteur');
+        }
+        return data;
+      } catch (error) {
+        console.error('API: Exception lors de la mise à jour des droits:', error);
+        throw error;
+      }
+    },
+    getAll: async () => {
+      try {
+        console.log(`API: Envoi de la requête GET à ${API_URL}/recruiter-rights`);
+        const response = await fetch(`${API_URL}/recruiter-rights`);
+        const data = await response.json();
+        console.log('API: Données reçues:', data);
+        if (!response.ok) {
+          throw new Error(data.error || 'Impossible de récupérer les droits des recruteurs');
+        }
+        return data;
+      } catch (error) {
+        console.error('API: Exception lors de la récupération des droits:', error);
+        throw error;
+      }
+    },
+  },
+
+  candidateStatus: {
+    update: async (id: string, data: { name: string, is_active: boolean }) => {
+      try {
+        console.log(`[API] candidateStatus.update - id:`, id, 'data:', data);
+        console.log(`API: Envoi de la requête PUT à ${API_URL}/candidate-status/${id}`);
+        console.log('API: Données à envoyer:', data);
+        const response = await fetch(`${API_URL}/candidate-status/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data),
+        });
+        const resData = await response.json();
+        console.log('[API] candidateStatus.update - Réponse reçue:', resData);
+        if (!response.ok) {
+          console.error('[API] candidateStatus.update - Erreur HTTP:', resData);
+          throw new Error(resData.error || 'Unable to update candidate status');
+        }
+        return resData;
+      } catch (error) {
+        console.error('[API] candidateStatus.update - Exception:', error);
+        throw error;
+      }
+    },
+    getAll: async () => {
+      try {
+        console.log(`API: Envoi de la requête GET à ${API_URL}/candidate-status`);
+        const response = await fetch(`${API_URL}/candidate-status`);
+        const data = await response.json();
+        console.log('[API] candidateStatus.getAll - Données reçues:', data);
+        if (!response.ok) {
+          throw new Error(data.error || 'Unable to fetch candidate statuses');
+        }
+        return data;
+      } catch (error) {
+        console.error('[API] candidateStatus.getAll - Exception:', error);
+        throw error;
+      }
+    },
+  },
 };

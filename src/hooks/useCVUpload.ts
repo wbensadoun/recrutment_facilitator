@@ -1,46 +1,50 @@
 
 import { useState } from 'react';
-import { supabase } from '@/integrations/postgres/client';
 import { useToast } from '@/hooks/use-toast';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export const useCVUpload = () => {
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
 
   const uploadCV = async (file: File, candidateId: string): Promise<string | null> => {
+    setUploading(true);
     try {
-      setUploading(true);
+      console.log('[CV UPLOAD] Début upload pour candidat:', candidateId);
+      console.log('[CV UPLOAD] Fichier:', file.name, 'Taille:', file.size);
 
-      // Générer un nom de fichier unique
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${candidateId}-${Date.now()}.${fileExt}`;
-      const filePath = `cvs/${fileName}`;
+      const formData = new FormData();
+      formData.append('cv', file);
+      formData.append('candidateId', candidateId);
 
-      // Upload du fichier
-      const { error: uploadError } = await supabase.storage
-        .from('cvs')
-        .upload(filePath, file);
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Obtenir l'URL publique
-      const { data } = supabase.storage
-        .from('cvs')
-        .getPublicUrl(filePath);
-
-      toast({
-        title: "CV uploaded",
-        description: "The CV has been successfully uploaded",
+      const response = await fetch(`${API_URL}/candidates/${candidateId}/cv`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
       });
 
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Error uploading CV:', error);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erreur lors de l\'upload du CV');
+      }
+
+      const data = await response.json();
+      console.log('[CV UPLOAD] Upload réussi:', data);
+      
       toast({
-        title: "Upload error",
-        description: "Failed to upload CV",
+        title: "CV uploadé",
+        description: "Le CV a été uploadé avec succès",
+      });
+
+      return data.cv_url;
+    } catch (error) {
+      console.error('[CV UPLOAD] Erreur:', error);
+      toast({
+        title: "Erreur d'upload",
+        description: error.message || "Impossible d'uploader le CV",
         variant: "destructive",
       });
       return null;
@@ -51,17 +55,18 @@ export const useCVUpload = () => {
 
   const deleteCV = async (cvUrl: string) => {
     try {
-      // Extraire le chemin du fichier depuis l'URL
-      const urlParts = cvUrl.split('/');
-      const fileName = urlParts[urlParts.length - 1];
-      const filePath = `cvs/${fileName}`;
+      const response = await fetch(`${API_URL}/candidates/cv`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ cv_url: cvUrl })
+      });
 
-      const { error } = await supabase.storage
-        .from('cvs')
-        .remove([filePath]);
-
-      if (error) {
-        throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erreur lors de la suppression du CV');
       }
 
       toast({
@@ -71,8 +76,8 @@ export const useCVUpload = () => {
     } catch (error) {
       console.error('Error deleting CV:', error);
       toast({
-        title: "Error",
-        description: "Failed to delete CV",
+        title: "Erreur",
+        description: error.message || "Impossible de supprimer le CV",
         variant: "destructive",
       });
     }

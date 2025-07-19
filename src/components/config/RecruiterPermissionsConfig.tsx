@@ -1,5 +1,5 @@
 
-import { useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,33 +15,22 @@ const RecruiterPermissionsConfig = () => {
     recruiterPermissions, 
     permissions, 
     loading, 
-    hasPermission, 
     updateRecruiterPermissions, 
     setAllPermissions, 
     saveRecruiterPermissions 
   } = useRecruiterPermissions();
 
-  // Initialize permissions for new recruiters
-  useEffect(() => {
-    const activeRecruiters = recruiters.filter(r => r.status === 'active');
-    const existingPermissions = recruiterPermissions.map(rp => rp.recruiterId);
-    
-    const newRecruiters = activeRecruiters.filter(r => !existingPermissions.includes(String(r.id)));
-    
-    if (newRecruiters.length > 0) {
-      newRecruiters.forEach(recruiter => {
-        setAllPermissions(String(recruiter.id), false); // No permissions by default
-      });
-    }
-  }, [recruiters, recruiterPermissions, setAllPermissions]);
-
-  const handleTogglePermission = (recruiterId: string, permissionId: string) => {
-    const currentlyHas = hasPermission(recruiterId, permissionId);
-    updateRecruiterPermissions(recruiterId, permissionId, !currentlyHas);
-  };
-
   const handleSavePermissions = () => {
     saveRecruiterPermissions(recruiterPermissions);
+  };
+  
+  // Fonction pour basculer une permission unique
+  const handleTogglePermission = (recruiterId: string, permissionId: string, checked: boolean) => {
+    const currentPerms = recruiterPermissions.find(p => p.recruiterId === recruiterId)?.permissions || [];
+    const newPermissions = checked
+      ? [...currentPerms, permissionId]
+      : currentPerms.filter(pId => pId !== permissionId);
+    updateRecruiterPermissions(recruiterId, newPermissions);
   };
 
   if (loading) {
@@ -67,8 +56,9 @@ const RecruiterPermissionsConfig = () => {
 
       <div className="space-y-6">
         {recruiters.filter(r => r.status === 'active').map((recruiter) => {
-          const recruiterPerm = recruiterPermissions.find(rp => rp.recruiterId === String(recruiter.id));
-          const allPermissionsEnabled = permissions.every(p => hasPermission(String(recruiter.id), p.id));
+          const recruiterIdStr = String(recruiter.id);
+          const currentRecruiterPerms = recruiterPermissions.find(rp => rp.recruiterId === recruiterIdStr)?.permissions || [];
+          const allPermissionsEnabled = permissions.length > 0 && currentRecruiterPerms.length === permissions.length;
           
           return (
             <Card key={recruiter.id}>
@@ -88,7 +78,7 @@ const RecruiterPermissionsConfig = () => {
                       <Switch
                         id={`all-permissions-${recruiter.id}`}
                         checked={allPermissionsEnabled}
-                        onCheckedChange={(checked) => setAllPermissions(String(recruiter.id), checked)}
+                        onCheckedChange={(checked) => setAllPermissions(recruiterIdStr, checked)}
                       />
                       <Label htmlFor={`all-permissions-${recruiter.id}`} className="text-sm">
                         All rights
@@ -108,8 +98,8 @@ const RecruiterPermissionsConfig = () => {
                       </div>
                       <Switch
                         id={`${recruiter.id}-${permission.id}`}
-                        checked={hasPermission(String(recruiter.id), permission.id)}
-                        onCheckedChange={() => handleTogglePermission(String(recruiter.id), permission.id)}
+                        checked={currentRecruiterPerms.includes(permission.id)}
+                        onCheckedChange={(checked) => handleTogglePermission(recruiterIdStr, permission.id, checked)}
                       />
                     </div>
                   ))}
@@ -117,7 +107,7 @@ const RecruiterPermissionsConfig = () => {
                 
                 <div className="mt-4 pt-4 border-t">
                   <div className="text-sm text-gray-600">
-                    Active permissions: {recruiterPerm?.permissions.length || 0} / {permissions.length}
+                    Active permissions: {currentRecruiterPerms.length} / {permissions.length}
                   </div>
                 </div>
               </CardContent>
@@ -125,12 +115,6 @@ const RecruiterPermissionsConfig = () => {
           );
         })}
       </div>
-
-      {recruiters.filter(r => r.status === 'active').length === 0 && (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No active recruiters to configure permissions</p>
-        </div>
-      )}
     </div>
   );
 };
