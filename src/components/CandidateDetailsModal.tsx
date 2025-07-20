@@ -10,11 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { useCandidates } from '@/hooks/useCandidates';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
-import { Candidate, CandidateStatus } from '@/types/database';
+import { useCVUpload } from '@/hooks/useCVUpload';
+import { useRecruiters } from '@/hooks/useRecruiters';
+import { Candidate } from '@/types/database';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Download, FileText, ExternalLink, Upload } from 'lucide-react';
 import CVUploadModal from './CVUploadModal';
+import { CandidateStatus } from '@/types/enums';
 
 interface CandidateDetailsModalProps {
   isOpen: boolean;
@@ -31,7 +34,10 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
     position: string;
     experience: string;
     current_stage: string;
-    status: CandidateStatus;
+    status: Candidate['status'];
+    salary_expectation: string;
+    recruiter_id: string;
+    last_interview_date: string;
   }>({
     firstname: '',
     lastname: '',
@@ -40,13 +46,20 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
     position: '',
     experience: '',
     current_stage: '1',
-    status: 'scheduled',
+    status: CandidateStatus.SCHEDULED,
+    salary_expectation: '',
+    recruiter_id: '',
+    last_interview_date: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCVUpload, setShowCVUpload] = useState(false);
+  const [selectedCVFile, setSelectedCVFile] = useState<File | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { toast } = useToast();
   const { updateCandidateStatus, updateCandidateStage, updateCandidate } = useCandidates();
   const { stages: pipelineStages, loading: stagesLoading } = usePipelineStages();
+  const { uploadCV } = useCVUpload();
+  const { recruiters } = useRecruiters();
 
   useEffect(() => {
     if (candidate) {
@@ -58,7 +71,10 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
         position: candidate.position || '',
         experience: candidate.experience || '',
         current_stage: candidate.current_stage || '1',
-        status: candidate.status || 'scheduled',
+        status: candidate.status || CandidateStatus.SCHEDULED,
+        salary_expectation: candidate.salary_expectation ? String(candidate.salary_expectation) : '',
+        recruiter_id: candidate.recruiter_id ? String(candidate.recruiter_id) : '',
+        last_interview_date: candidate.last_interview_date || '',
       });
     }
   }, [candidate]);
@@ -93,6 +109,7 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
     if (!candidate) return;
 
     setIsSubmitting(true);
+    setSubmitError(null);
     
     try {
       // Préparer les données à mettre à jour
@@ -109,10 +126,19 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
         updates.experience = formData.experience;
       }
       if (formData.status !== candidate.status) {
-        updates.status = formData.status;
+        updates.status = formData.status as Candidate['status'];
       }
       if (formData.current_stage !== candidate.current_stage) {
         updates.current_stage = formData.current_stage;
+      }
+      if (formData.salary_expectation !== (candidate.salary_expectation ? String(candidate.salary_expectation) : '')) {
+        updates.salary_expectation = formData.salary_expectation;
+      }
+      if (formData.recruiter_id !== (candidate.recruiter_id ? String(candidate.recruiter_id) : '')) {
+        updates.recruiter_id = formData.recruiter_id ? parseInt(formData.recruiter_id, 10) : undefined;
+      }
+      if (formData.last_interview_date !== (candidate.last_interview_date || '')) {
+        updates.last_interview_date = formData.last_interview_date;
       }
 
       // Mettre à jour via l'API si des changements ont été détectés
@@ -120,6 +146,28 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
         await updateCandidate(candidate.id, updates);
       }
       
+      // Si un fichier CV a été sélectionné, l'uploader maintenant
+      if (selectedCVFile) {
+        try {
+          const cvUrl = await uploadCV(selectedCVFile, String(candidate.id));
+          if (cvUrl) {
+            toast({
+              title: "CV uploadé",
+              description: `Le CV de ${candidate.firstname} ${candidate.lastname} a été mis à jour`,
+            });
+          }
+          setSelectedCVFile(null);
+        } catch (error: any) {
+          if (error?.message?.includes('already used')) {
+            setSubmitError('This CV file is already used by another candidate. Please select a different file.');
+            return; // Ne ferme pas le modal
+          } else {
+            setSubmitError('An error occurred while uploading the CV.');
+            return;
+          }
+        }
+      }
+
       toast({
         title: "Candidate updated",
         description: `${candidate.firstname} ${candidate.lastname}'s information has been updated`,
@@ -127,6 +175,7 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
       
       onClose();
     } catch (error) {
+      setSubmitError('An error occurred while updating the candidate.');
       console.error('Error updating candidate:', error);
     } finally {
       setIsSubmitting(false);
@@ -135,20 +184,20 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
 
   const getStatusColor = (status: CandidateStatus) => {
     switch (status) {
-      case 'validated': return 'bg-green-100 text-green-800';
-      case 'in_progress': return 'bg-blue-100 text-blue-800';
-      case 'scheduled': return 'bg-yellow-100 text-yellow-800';
-      case 'rejected': return 'bg-red-100 text-red-800';
+      case CandidateStatus.VALIDATED: return 'bg-green-100 text-green-800';
+      case CandidateStatus.IN_PROGRESS: return 'bg-blue-100 text-blue-800';
+      case CandidateStatus.SCHEDULED: return 'bg-yellow-100 text-yellow-800';
+      case CandidateStatus.REJECTED: return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getStatusLabel = (status: CandidateStatus) => {
     switch (status) {
-      case 'validated': return 'Validated';
-      case 'in_progress': return 'In Progress';
-      case 'scheduled': return 'Scheduled';
-      case 'rejected': return 'Rejected';
+      case CandidateStatus.VALIDATED: return 'Validated';
+      case CandidateStatus.IN_PROGRESS: return 'In Progress';
+      case CandidateStatus.SCHEDULED: return 'Scheduled';
+      case CandidateStatus.REJECTED: return 'Rejected';
       default: return status;
     }
   };
@@ -166,10 +215,10 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
   const handleDownloadCV = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     if (!candidate?.cv_url) return;
-    
+    const fileName = candidate.cv_url.split('/').pop() || 'cv.pdf';
     const link = document.createElement('a');
     link.href = candidate.cv_url;
-    link.download = `CV_${candidate.firstname}_${candidate.lastname}.pdf`;
+    link.download = fileName;
     link.target = '_blank';
     document.body.appendChild(link);
     link.click();
@@ -256,6 +305,18 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
+                  <Label htmlFor="salary_expectation">Salary Expectation (€)</Label>
+                  <Input
+                    id="salary_expectation"
+                    type="number"
+                    value={formData.salary_expectation}
+                    onChange={(e) => setFormData(prev => ({ ...prev, salary_expectation: e.target.value }))}
+                    placeholder="45000"
+                    min="0"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="stage">Current stage</Label>
                   <Select
                     value={formData.current_stage}
@@ -277,8 +338,9 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
-                <div className="space-y-2">
+              <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
                   <Select
                     value={formData.status}
@@ -288,38 +350,52 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="scheduled">Scheduled</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="validated">Validated</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
+                      <SelectItem value={CandidateStatus.SCHEDULED}>Scheduled</SelectItem>
+                      <SelectItem value={CandidateStatus.IN_PROGRESS}>In Progress</SelectItem>
+                      <SelectItem value={CandidateStatus.VALIDATED}>Validated</SelectItem>
+                      <SelectItem value={CandidateStatus.REJECTED}>Rejected</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-medium mb-2">System Information</h4>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p><strong>Created on:</strong> {format(new Date(candidate.created_at), 'dd/MM/yyyy HH:mm', { locale: fr })}</p>
-                  <p><strong>Last modified:</strong> {format(new Date(candidate.updated_at), 'dd/MM/yyyy HH:mm', { locale: fr })}</p>
-                  {candidate.last_interview_date && (
-                    <p><strong>Last interview:</strong> {format(new Date(candidate.last_interview_date), 'dd/MM/yyyy', { locale: fr })}</p>
-                  )}
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="recruiter_id">Recruiter</Label>
+                <Select
+                  value={formData.recruiter_id}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, recruiter_id: value }))}
+                  disabled={recruiters.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a recruiter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {recruiters.filter(r => r.status === 'active').map((recruiter) => (
+                      <SelectItem key={recruiter.id} value={String(recruiter.id)}>
+                        {recruiter.firstname} {recruiter.lastname}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-
+              {/* SUPPRIMER LE BLOC SYSTEM INFORMATION ICI */}
+              {/* <div className="bg-gray-50 rounded-lg p-4 text-xs text-gray-600">
+                <div><strong>Created on:</strong> {format(new Date(candidate.created_at), 'dd/MM/yyyy HH:mm')}</div>
+                <div><strong>Last modified:</strong> {format(new Date(candidate.updated_at), 'dd/MM/yyyy HH:mm')}</div>
+              </div> */}
               <div className="flex justify-end gap-3 pt-4">
+                {submitError && (
+                  <div className="w-full text-center text-red-600 text-sm mb-2">{submitError}</div>
+                )}
                 <Button type="button" variant="outline" onClick={onClose}>
                   Close
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Updating...' : 'Update'}
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                  Update
                 </Button>
               </div>
             </form>
           </div>
-
-          {/* Section CV */}
+          {/* Colonne droite : CV + Last Interview Date */}
           <div className="space-y-4">
             <Card>
               <CardHeader>
@@ -334,23 +410,14 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
               <CardContent>
                 {candidate.cv_url ? (
                   <div className="space-y-4">
-                    {/* Aperçu du CV */}
+                    {/* Affichage du nom du CV et bouton Download uniquement */}
                     <div className="border rounded-lg overflow-hidden bg-gray-50">
                       <div className="p-4 border-b bg-white flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <FileText className="w-4 h-4 text-red-600" />
-                          <span className="text-sm font-medium">CV_{candidate.firstname}_{candidate.lastname}.pdf</span>
+                          <span className="text-sm font-medium">{candidate.cv_url.split('/').pop()}</span>
                         </div>
                         <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleViewCV}
-                            className="flex items-center gap-1"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                            Open
-                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -362,17 +429,7 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                           </Button>
                         </div>
                       </div>
-                      
-                      {/* Prévisualisation du PDF intégrée */}
-                      <div className="h-96 bg-white">
-                        <iframe
-                          src={`${candidate.cv_url}#view=FitH`}
-                          className="w-full h-full border-0"
-                          title={`CV of ${candidate.firstname} ${candidate.lastname}`}
-                        />
-                      </div>
                     </div>
-                    
                     <div className="flex justify-center">
                       <Button
                         variant="outline"
@@ -383,9 +440,8 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                         Replace CV
                       </Button>
                     </div>
-                    
                     <p className="text-xs text-gray-500 text-center">
-                      Use the "Open" or "Download" buttons for better viewing
+                      Use the "Download" button to get the CV
                     </p>
                   </div>
                 ) : (
@@ -403,6 +459,17 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                 )}
               </CardContent>
             </Card>
+            {/* Champ Last Interview Date déplacé ici */}
+            <div className="space-y-2">
+              <Label htmlFor="last_interview_date">Last Interview Date</Label>
+              <Input
+                id="last_interview_date"
+                type="date"
+                value={formData.last_interview_date ? formData.last_interview_date.slice(0, 10) : ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, last_interview_date: e.target.value }))}
+                placeholder="YYYY-MM-DD"
+              />
+            </div>
           </div>
         </div>
 
@@ -414,6 +481,7 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
             candidateId={candidate.id.toString()}
             candidateName={`${candidate.firstname} ${candidate.lastname}`}
             currentCvUrl={candidate.cv_url || ''}
+            onSelect={(file) => setSelectedCVFile(file)}
           />
         )}
       </DialogContent>

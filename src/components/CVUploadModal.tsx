@@ -13,13 +13,15 @@ interface CVUploadModalProps {
   onClose: () => void;
   candidateId: string;
   candidateName: string;
-  currentCvUrl?: string | null;
+  currentCvUrl: string;
+  onSelect: (file: File) => void;
 }
 
-const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvUrl }: CVUploadModalProps) => {
+const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvUrl, onSelect }: CVUploadModalProps) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const { uploadCV, uploading } = useCVUpload();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { toast } = useToast();
+  const { uploadCV } = useCVUpload();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -44,9 +46,9 @@ const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvU
     }
   };
 
-  const handleUpload = async () => {
+  const handleValidate = async () => {
     if (!selectedFile) return;
-
+    setErrorMsg(null);
     try {
       const cvUrl = await uploadCV(selectedFile, candidateId);
       if (cvUrl) {
@@ -55,11 +57,14 @@ const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvU
           description: `Le CV de ${candidateName} a été mis à jour`,
         });
         onClose();
-        // Refresh the page to show the new CV
-        window.location.reload();
       }
-    } catch (error) {
-      console.error('Error uploading CV:', error);
+    } catch (error: any) {
+      // Si erreur 409, afficher le message dans le modal sans fermer
+      if (error?.message?.includes('already used')) {
+        setErrorMsg('This CV file is already used by another candidate. Please select a different file.');
+      } else {
+        setErrorMsg('An error occurred while uploading the CV.');
+      }
     }
   };
 
@@ -79,8 +84,12 @@ const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvU
             Sélectionnez un fichier PDF pour {currentCvUrl ? 'remplacer' : 'ajouter'} le CV
           </DialogDescription>
         </DialogHeader>
-        
         <div className="space-y-4">
+          {errorMsg && (
+            <div className="p-2 bg-red-100 text-red-700 rounded text-sm text-center">
+              {errorMsg}
+            </div>
+          )}
           {currentCvUrl && (
             <div className="p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -89,7 +98,6 @@ const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvU
               </div>
             </div>
           )}
-
           <div className="space-y-2">
             <Label htmlFor="cv-file">Sélectionner un fichier PDF</Label>
             <Input
@@ -100,7 +108,6 @@ const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvU
               className="cursor-pointer"
             />
           </div>
-
           {selectedFile && (
             <div className="p-3 bg-blue-50 rounded-lg">
               <div className="flex items-center gap-2 text-sm text-blue-700">
@@ -110,19 +117,9 @@ const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvU
               </div>
             </div>
           )}
-
-          <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={handleClose}>
-              Annuler
-            </Button>
-            <Button 
-              onClick={handleUpload} 
-              disabled={!selectedFile || uploading}
-              className="flex items-center gap-2"
-            >
-              <Upload className="w-4 h-4" />
-              {uploading ? 'Upload en cours...' : 'Uploader'}
-            </Button>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={handleClose}>Annuler</Button>
+            <Button onClick={handleValidate} disabled={!selectedFile}>Valider</Button>
           </div>
         </div>
       </DialogContent>

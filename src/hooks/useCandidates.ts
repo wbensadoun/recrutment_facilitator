@@ -1,8 +1,9 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/services/api';
-import { Candidate, CandidateStatus, StageType } from '@/types/database';
+import { Candidate, StageType } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
+import { CandidateStatus } from '@/types/enums';
 
 export const useCandidates = () => {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -81,61 +82,48 @@ export const useCandidates = () => {
     });
   };
 
-    const updateCandidateStage = async (candidateId: number, stageId: number) => {
+    const updateCandidateStage = async (candidateId: number, newStage: string | number) => {
     try {
-      // Trouver le candidat pour garder les autres propriétés
       const candidate = candidates.find(c => c.id === candidateId);
       if (!candidate) {
         throw new Error('Candidat non trouvé');
       }
-
-      // Mettre à jour le candidat avec le nouveau current_stage
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/candidates/${candidateId}`, {
-        method: 'PUT',
+      const current_stage = String(newStage);
+      console.log('[updateCandidateStage] PATCH /api/candidates/' + candidateId, { current_stage });
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/candidates/${candidateId}/stage`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({
-          ...candidate,
-          pipeline_stage_id: stageId
-        })
+        body: JSON.stringify({ current_stage })
       });
-      
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('[updateCandidateStage] API error:', errorData);
         throw new Error(errorData.error || 'Impossible de mettre à jour le stage du candidat');
       }
-      
-      // Mettre à jour le cache local
+      const data = await response.json();
+      console.log('[updateCandidateStage] Success:', data);
       setCandidates(prevCandidates => 
         prevCandidates.map(c => 
           c.id === candidateId 
-            ? { 
-                ...c, 
-                pipeline_stage_id: stageId,
-                status: 'in_progress',
-                // Mettre à jour le nom de l'étape si disponible dans la réponse
-                ...(c.stage_name && { stage_name: `Stage ${stageId}` }) // À remplacer par le vrai nom de l'étape si disponible
-              } 
+            ? { ...c, current_stage }
             : c
         )
       );
-      
       toast({
         title: "Stage mis à jour",
         description: "Le stage du candidat a été mis à jour avec succès",
       });
-      
-      return await response.json();
+      return data;
     } catch (error) {
-      console.error('Error updating candidate stage:', error);
+      console.error('[updateCandidateStage] Exception:', error);
       toast({
         title: "Erreur",
-        description: error.message || "Impossible de mettre à jour le stage du candidat",
+        description: "Impossible de mettre à jour le stage du candidat",
         variant: "destructive",
       });
-      throw error;
     }
   };
 

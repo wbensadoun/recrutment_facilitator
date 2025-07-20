@@ -133,13 +133,14 @@ const CandidateList = () => {
     }
   };
 
-  const handleDownloadCV = (cvUrl: string | null | undefined, candidateName: string) => {
+  const handleDownloadCV = (cvUrl: string | null | undefined) => {
     if (!cvUrl) return;
     
     try {
+      const fileName = cvUrl.split('/').pop() || 'cv.pdf';
       const link = document.createElement('a');
       link.href = cvUrl;
-      link.download = `CV_${candidateName.replace(/\s+/g, '_')}.pdf`;
+      link.download = fileName;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       document.body.appendChild(link);
@@ -241,8 +242,8 @@ const CandidateList = () => {
                 
                 <div className="flex justify-between items-center pt-2">
                   <div className="flex gap-2">
-                    <Badge className={getStageColor(candidate.current_stage)}>
-                      {getStageLabel(candidate.current_stage)}
+                    <Badge className={getStageColor(Number(candidate.current_stage))}>
+                      {getStageLabel(Number(candidate.current_stage))}
                     </Badge>
                     <Badge className={getStatusColor(candidate.status)}>
                       {getStatusLabel(candidate.status)}
@@ -254,10 +255,7 @@ const CandidateList = () => {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => handleDownloadCV(
-                          candidate.cv_url, 
-                          `${candidate.firstname || 'candidate'}_${candidate.lastname || ''}`.trim()
-                        )}
+                        onClick={() => handleDownloadCV(candidate.cv_url)}
                         title="Download CV"
                         aria-label="Download CV"
                       >

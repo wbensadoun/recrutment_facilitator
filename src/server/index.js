@@ -7,7 +7,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const nodemailer = require('nodemailer');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -523,7 +523,7 @@ app.post('/api/candidates', async (req, res) => {
   const { 
     firstname, lastname, email, position, 
     current_stage = 'soft_skills', status = 'in_progress', 
-    salary_expectation
+    salary_expectation, phone, experience, recruiter_id, last_interview_date
   } = req.body;
 
   if (!firstname || !lastname || !email || !position) {
@@ -541,16 +541,13 @@ app.post('/api/candidates', async (req, res) => {
        VALUES ($1, $2, $3, $4, 'candidate', 'active', NOW()) RETURNING *`,
       [firstname, lastname, email, hashedPassword]
     );
-    
-    console.log(`New candidate created with password: ${password}`);
-
     const userId = userResult.rows[0].id;
 
     const candidateResult = await pool.query(
-      `INSERT INTO candidates (users_id, position, pipeline_stage_id, status, salary_expectation, created_at) 
-       VALUES ($1, $2, 1, 'scheduled', $3, NOW()) 
+      `INSERT INTO candidates (users_id, position, current_stage, status, salary_expectation, phone, experience, recruiter_id, last_interview_date, created_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) 
        RETURNING *`,
-      [userId, position, salary_expectation]
+      [userId, position, current_stage, status, salary_expectation, phone, experience, recruiter_id, last_interview_date]
     );
 
     await pool.query('COMMIT');
@@ -570,122 +567,100 @@ app.post('/api/candidates', async (req, res) => {
 
 // Mettre à jour un candidat existant
 // Mettre à jour uniquement le stage d'un candidat
-app.put('/api/candidates/:id/stage', async (req, res) => {
+app.patch('/api/candidates/:id/stage', async (req, res) => {
   const { id } = req.params;
-  const { current_stage, current_stage_id } = req.body;
-
-  if (!current_stage && !current_stage_id) {
-    return res.status(400).json({ error: 'current_stage or current_stage_id is required' });
+  const { current_stage } = req.body;
+  console.log(`[PATCH /api/candidates/${id}/stage] Body:`, req.body);
+  if (!current_stage) {
+    return res.status(400).json({ error: 'current_stage is required' });
   }
-
   try {
-    const stageId = current_stage_id || current_stage;
-    
     const result = await pool.query(
-      `UPDATE candidates 
-       SET current_stage_id = $1, 
-           updated_at = NOW()
-       WHERE id = $2 
-       RETURNING *`,
-      [stageId, id]
+      `UPDATE candidates SET current_stage = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [current_stage, id]
     );
-
+    console.log(`[PATCH /api/candidates/${id}/stage] SQL result:`, result.rows);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Candidate not found' });
     }
-
     res.json(result.rows[0]);
   } catch (error) {
-    console.error('Error updating candidate stage:', error);
+    console.error(`[PATCH /api/candidates/${id}/stage] Error:`, error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Mettre à jour un candidat existant
-app.put('/api/candidates/:id', async (req, res) => {
+// PATCH: Mettre à jour partiellement un candidat existant
+app.patch('/api/candidates/:id', async (req, res) => {
   const { id } = req.params;
-  const { 
-    firstname, lastname, email, position,
-    current_stage, current_stage_id, // Gérer les deux formats
-    status, status_id, // Gérer les deux formats
-    salary_expectation
-  } = req.body;
-
-  if (!firstname || !lastname || !email || !position) {
-    return res.status(400).json({ error: 'firstname, lastname, email, and position are required' });
-  }
-
-  // Utiliser current_stage si current_stage_id n'est pas fourni
-  const stageId = current_stage_id || current_stage;
-  // Utiliser status si status_id n'est pas fourni
-  const statId = status_id || status;
-
   try {
+    // Récupérer le candidat et l'utilisateur existants
+    const candidateResult = await pool.query(
+      `SELECT c.*, u.firstname, u.lastname, u.email 
+       FROM candidates c 
+       JOIN users u ON c.users_id = u.id 
+       WHERE c.id = $1`, [id]
+    );
+    if (candidateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Candidate not found' });
+    }
+    const existing = candidateResult.rows[0];
+
+    // Utiliser les valeurs envoyées OU existantes
+    const firstname = req.body.firstname ?? existing.firstname;
+    const lastname = req.body.lastname ?? existing.lastname;
+    const email = req.body.email ?? existing.email;
+    const position = req.body.position ?? existing.position;
+    const current_stage = req.body.current_stage ?? existing.current_stage;
+    const status = req.body.status ?? existing.status;
+    const salary_expectation = req.body.salary_expectation ?? existing.salary_expectation;
+    const phone = req.body.phone ?? existing.phone;
+    const experience = req.body.experience ?? existing.experience;
+    const recruiter_id = req.body.recruiter_id ?? existing.recruiter_id;
+    const last_interview_date = req.body.last_interview_date ?? existing.last_interview_date;
+
     await pool.query('BEGIN');
 
     // Mettre à jour l'utilisateur
-    const userResult = await pool.query(
+    await pool.query(
       `UPDATE users 
        SET firstname = $1, lastname = $2, email = $3, updated_at = NOW() 
-       WHERE id = (SELECT users_id FROM candidates WHERE id = $4) 
-       RETURNING id, firstname, lastname, email, role, status, created_at, updated_at`,
+       WHERE id = (SELECT users_id FROM candidates WHERE id = $4)` ,
       [firstname, lastname, email, id]
     );
 
-    if (userResult.rows.length === 0) {
-      await pool.query('ROLLBACK');
-      return res.status(404).json({ error: 'User not found for this candidate' });
-    }
-
     // Mettre à jour le candidat
-    const candidateResult = await pool.query(
+    await pool.query(
       `UPDATE candidates 
        SET position = $1, 
-           current_stage_id = $2, 
-           status_id = $3, 
+           current_stage = $2, 
+           status = $3, 
            salary_expectation = $4, 
+           phone = $5,
+           experience = $6,
+           recruiter_id = $7,
+           last_interview_date = $8,
            updated_at = NOW()
-       WHERE id = $5 
-       RETURNING *`,
-      [position, stageId, statId, salary_expectation, id]
+       WHERE id = $9`,
+      [position, current_stage, status, salary_expectation, phone, experience, recruiter_id, last_interview_date, id]
     );
 
-    if (candidateResult.rows.length === 0) {
-      await pool.query('ROLLBACK');
-      return res.status(404).json({ error: 'Candidate not found' });
-    }
-
     await pool.query('COMMIT');
-    
+
     // Récupérer les données complètes du candidat mises à jour
-    const updatedCandidate = await pool.query(`
-      SELECT c.*, 
-             u.firstname, u.lastname, u.email, u.role, u.status as user_status,
-             cs.name as status_name, cs.color as status_color,
-             ps.name as current_stage_name, ps.stage_order
-      FROM candidates c
-      JOIN users u ON c.user_id = u.id
-      LEFT JOIN candidate_statuses cs ON c.status_id = cs.id
-      LEFT JOIN pipeline_stages ps ON c.current_stage_id = ps.id
-      WHERE c.id = $1
-    `, [id]);
-    
+    const updatedCandidate = await pool.query(
+      `SELECT c.*, u.firstname, u.lastname, u.email, u.role, u.status as user_status
+       FROM candidates c
+       JOIN users u ON c.users_id = u.id
+       WHERE c.id = $1`, [id]);
+    console.log(`[PATCH /api/candidates/${id}] Updated candidate:`, updatedCandidate.rows[0]);
     if (updatedCandidate.rows.length === 0) {
       return res.status(404).json({ error: 'Failed to fetch updated candidate data' });
     }
-    
-    // Formater la réponse pour le frontend
-    const result = {
-      ...updatedCandidate.rows[0],
-      status: updatedCandidate.rows[0].status_name,
-      current_stage: updatedCandidate.rows[0].current_stage_name,
-      stage_order: updatedCandidate.rows[0].stage_order
-    };
-    
-    res.json(result);
+    res.json(updatedCandidate.rows[0]);
   } catch (error) {
     await pool.query('ROLLBACK');
-    console.error('Error updating candidate:', error);
+    console.error('Error patching candidate:', error);
     if (error.code === '23505') {
       res.status(409).json({ error: 'A user with this email already exists' });
     } else {
@@ -1110,28 +1085,26 @@ app.get('/api/candidate-status', async (req, res) => {
 app.post('/api/candidates/:id/cv', upload.single('cv'), async (req, res) => {
   try {
     const candidateId = req.params.id;
-    
     if (!req.file) {
       return res.status(400).json({ error: 'Aucun fichier fourni' });
     }
-
-    console.log('[CV UPLOAD] Upload pour candidat:', candidateId);
-    console.log('[CV UPLOAD] Fichier:', req.file.filename);
-
+    // Vérifier si ce nom de fichier est déjà utilisé par un autre candidat
+    const existing = await pool.query('SELECT id FROM candidates WHERE cv_url = $1 AND id != $2', [`/uploads/${req.file.originalname}`, candidateId]);
+    if (existing.rows.length > 0) {
+      // Supprimer le fichier uploadé pour ne pas polluer le dossier
+      fs.unlinkSync(req.file.path);
+      return res.status(409).json({ error: 'This CV file is already used by another candidate.' });
+    }
     // Construire l'URL du fichier
-    const cvUrl = `/uploads/${req.file.filename}`;
-
+    const cvUrl = `/uploads/${req.file.originalname}`;
     // Mettre à jour le candidat avec l'URL du CV
     const result = await pool.query(
       'UPDATE candidates SET cv_url = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
       [cvUrl, candidateId]
     );
-
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Candidat non trouvé' });
     }
-
-    console.log('[CV UPLOAD] CV mis à jour pour candidat:', candidateId);
     res.json({ 
       message: 'CV uploadé avec succès',
       cv_url: cvUrl,

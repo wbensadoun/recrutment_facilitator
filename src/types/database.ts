@@ -1,4 +1,5 @@
-export type CandidateStatus = 'in_progress' | 'scheduled' | 'validated' | 'rejected';
+import { CandidateStatus } from './enums';
+export type { CandidateStatus };
 export type StageType = number; // L'ID de l'étape dans la base de données
 
 export type AuditAction = 'created' | 'updated' | 'deleted' | 'status_changed' | 'stage_changed';
@@ -32,6 +33,7 @@ export interface Candidate {
   created_at: string;
   updated_at: string;
   recruiter?: Recruiter;
+  salary_expectation?: string | number;
   // Champs supplémentaires pour les jointures
   recruiter_firstname?: string;
   recruiter_lastname?: string;

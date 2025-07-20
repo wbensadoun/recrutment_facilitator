@@ -1,17 +1,21 @@
 # Utiliser une image Node.js légère comme base
 FROM node:18-alpine
 
-# Définir le répertoire de travail dans le conteneur
-WORKDIR /app
+# Définir le répertoire de travail
+WORKDIR /app/src/server
 
-# Copier uniquement les fichiers de dépendances d'abord
-COPY package*.json ./
+# Copier les fichiers de dépendances du serveur
+COPY src/server/package.json ./
+COPY src/server/package-lock.json ./
 
-# Installer les dépendances avec un cache optimisé
-RUN npm ci
+# Installer les dépendances du serveur
+RUN npm install
+
+# Copier le reste du code du serveur
+COPY src/server/ .
 
 # Exposer le port
 EXPOSE 3000
 
-# Commande de démarrage du serveur backend
-CMD ["node", "src/server/index.js"]
+# Commande de démarrage
+CMD ["node", "index.js"]

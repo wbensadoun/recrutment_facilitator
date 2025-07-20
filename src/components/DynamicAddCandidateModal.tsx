@@ -29,8 +29,10 @@ const DynamicAddCandidateModal = ({ isOpen, onClose }: DynamicAddCandidateModalP
     position: '',
     experience: '',
     current_stage: StageType.INITIAL_CONTACT,
-    status: CandidateStatus.PENDING,
-    recruiter_id: null
+    status: CandidateStatus.SCHEDULED,
+    recruiter_id: '',
+    last_interview_date: '',
+    salary_expectation: '',
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,8 +53,10 @@ const DynamicAddCandidateModal = ({ isOpen, onClose }: DynamicAddCandidateModalP
         position: '',
         experience: '',
         current_stage: StageType.INITIAL_CONTACT,
-        status: CandidateStatus.PENDING,
-        recruiter_id: null
+        status: CandidateStatus.SCHEDULED,
+        recruiter_id: '',
+        last_interview_date: '',
+        salary_expectation: '',
       });
       setSelectedFile(null);
     }
@@ -95,9 +99,11 @@ const DynamicAddCandidateModal = ({ isOpen, onClose }: DynamicAddCandidateModalP
         phone: formData.phone,
         position: formData.position,
         experience: formData.experience,
-        pipeline_stage_id: stageToNumber(formData.current_stage),
-        status: statusToString(formData.status) as any,
-        recruiter_id: formData.recruiter_id ? parseInt(formData.recruiter_id) : undefined
+        current_stage: formData.current_stage,
+        status: formData.status,
+        recruiter_id: formData.recruiter_id ? parseInt(formData.recruiter_id, 10) : undefined,
+        last_interview_date: formData.last_interview_date,
+        salary_expectation: formData.salary_expectation,
       });
 
       // Si un CV est sélectionné, l'uploader
@@ -302,24 +308,48 @@ const DynamicAddCandidateModal = ({ isOpen, onClose }: DynamicAddCandidateModalP
 
           {recruiters.length > 0 && (
             <div className="space-y-2">
-              <Label htmlFor="recruiter">Assigned Recruiter</Label>
+              <Label htmlFor="recruiter_id">Recruiter</Label>
               <Select
-                value={formData.recruiter_id}
+                value={formData.recruiter_id || ''}
                 onValueChange={(value) => handleInputChange('recruiter_id', value)}
+                disabled={recruiters.length === 0}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a recruiter" />
                 </SelectTrigger>
                 <SelectContent>
-                  {recruiters.map((recruiter) => (
+                  {recruiters.filter(r => r.status === 'active').map((recruiter) => (
                     <SelectItem key={recruiter.id} value={String(recruiter.id)}>
-                      {`${recruiter.firstname} ${recruiter.lastname}`}
+                      {recruiter.firstname} {recruiter.lastname}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="last_interview_date">Last Interview Date</Label>
+            <Input
+              id="last_interview_date"
+              type="date"
+              value={formData.last_interview_date}
+              onChange={(e) => handleInputChange('last_interview_date', e.target.value)}
+              placeholder="YYYY-MM-DD"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="salary_expectation">Salary Expectation (€)</Label>
+            <Input
+              id="salary_expectation"
+              type="number"
+              value={formData.salary_expectation}
+              onChange={(e) => handleInputChange('salary_expectation', e.target.value)}
+              placeholder="45000"
+              min="0"
+            />
+          </div>
 
           <div className="flex justify-end gap-3 pt-4">
             <Button

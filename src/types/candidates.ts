@@ -1,27 +1,19 @@
-import { StageType, CandidateStatus } from './enums';
+import { CandidateStatus } from './enums';
 
-export type CandidateFormData = {
+export interface CandidateFormData {
   firstname: string;
   lastname: string;
   email: string;
   phone: string;
   position: string;
   experience: string;
-  current_stage: StageType;
+  current_stage: string;
   status: CandidateStatus;
-  recruiter_id: string | null;
-};
+  recruiter_id: string;
+  last_interview_date: string;
+  salary_expectation?: string | number;
+}
 
-export type NewCandidateData = {
-  firstname: string;
-  lastname: string;
-  email: string;
-  phone?: string;
-  position: string;
-  experience?: string;
-  current_stage: StageType;
-  status: CandidateStatus;
-  recruiter_id?: string;
-  cv_url?: string;
-  last_interview_date?: string;
-};
+export interface NewCandidateData extends CandidateFormData {
+  // autres champs spécifiques si besoin
+}

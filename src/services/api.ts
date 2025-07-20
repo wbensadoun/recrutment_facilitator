@@ -160,7 +160,7 @@ export const api = {
 
     update: async (id: number, data: any) => {
       const response = await fetch(`${API_URL}/candidates/${id}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },

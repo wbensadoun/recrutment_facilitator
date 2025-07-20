@@ -10,9 +10,8 @@ export enum StageType {
 }
 
 export enum CandidateStatus {
-  ACTIVE = 'ACTIVE',
-  INACTIVE = 'INACTIVE',
-  HIRED = 'HIRED', 
-  REJECTED = 'REJECTED',
-  PENDING = 'PENDING'
+  IN_PROGRESS = 'in_progress',
+  SCHEDULED = 'scheduled',
+  VALIDATED = 'validated',
+  REJECTED = 'rejected',
 }
