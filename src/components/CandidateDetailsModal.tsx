@@ -152,8 +152,8 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
           const cvUrl = await uploadCV(selectedCVFile, String(candidate.id));
           if (cvUrl) {
             toast({
-              title: "CV uploadé",
-              description: `Le CV de ${candidate.firstname} ${candidate.lastname} a été mis à jour`,
+              title: "CV uploaded",
+              description: `The CV of ${candidate.firstname} ${candidate.lastname} has been updated`,
             });
           }
           setSelectedCVFile(null);
@@ -415,7 +415,7 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
                       <div className="p-4 border-b bg-white flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <FileText className="w-4 h-4 text-red-600" />
-                          <span className="text-sm font-medium">{candidate.cv_url.split('/').pop()}</span>
+                          <span className="text-sm font-medium">{candidate.cv_original_filename || candidate.cv_url.split('/').pop()}</span>
                         </div>
                         <div className="flex gap-2">
                           <Button

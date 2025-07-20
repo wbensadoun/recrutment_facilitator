@@ -10,6 +10,7 @@ COPY src/server/package-lock.json ./
 
 # Installer les dépendances du serveur
 RUN npm install
+RUN npm install multer
 
 # Copier le reste du code du serveur
 COPY src/server/ .

@@ -18,7 +18,28 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configuration multer pour l'upload de fichiers
+// --- NOUVELLE CONFIGURATION MULTER POUR L'UPLOAD DE CV ---
+const cvStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(__dirname, 'uploads', 'cvs');
+    fs.mkdirSync(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    // Récupérer prénom et nom depuis le form-data
+    const firstname = req.body.firstname || 'unknown';
+    const lastname = req.body.lastname || 'unknown';
+    const timestamp = Date.now();
+    const extension = path.extname(file.originalname);
+    // Nettoyer les noms pour éviter les caractères spéciaux
+    const safeFirstname = firstname.replace(/[^a-zA-Z0-9-_]/g, '');
+    const safeLastname = lastname.replace(/[^a-zA-Z0-9-_]/g, '');
+    cb(null, `${safeFirstname}_${safeLastname}_${timestamp}${extension}`);
+  }
+});
+const uploadCV = multer({ storage: cvStorage });
+
+// --- ANCIENNE CONFIGURATION MULTER POUR LES AUTRES UPLOADS (si besoin) ---
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadDir = 'uploads/';
@@ -34,7 +55,6 @@ const storage = multer.diskStorage({
     cb(null, `cv_${candidateId}_${timestamp}${extension}`);
   }
 });
-
 const upload = multer({
   storage: storage,
   limits: {
@@ -88,245 +108,38 @@ app.get('/api/test', (req, res) => {
   res.json({ message: 'API backend is working!' });
 });
 
-// Generate secure token for password reset
-const crypto = require('crypto');
-// En développement, utiliser une valeur fixe pour éviter les problèmes lors du redémarrage du serveur
-const RESET_SECRET = process.env.NODE_ENV === 'production' 
-  ? (process.env.RESET_SECRET || crypto.randomBytes(32).toString('hex'))
-  : 'development-reset-secret-do-not-use-in-production';
+// =================================================================
+// --- ROUTES API ---
+// =================================================================
 
-// Helper function to generate reset token
-function generateResetToken(email) {
-  // Use a 1-hour window for token validity
-  const timeWindow = Math.floor(Date.now() / (1000 * 60 * 60));
-  return crypto
-    .createHmac('sha256', RESET_SECRET)
-    .update(`${email}${timeWindow}`)
-    .digest('hex');
-}
-
-// Configuration du transporteur d'emails
-const isProduction = process.env.NODE_ENV === 'production';
-let transporter;
-
-if (isProduction) {
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.office365.com',
-    port: process.env.SMTP_PORT || 587,
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASSWORD
-    }
-  });
-  console.log('Email transporter configured for production with SMTP');
-} else {
-  // En développement, on utilise un compte de test
-  transporter = nodemailer.createTransport({
-    host: 'smtp.ethereal.email',
-    port: 587,
-    secure: false,
-    auth: {
-      user: 'test@example.com',
-      pass: 'password'
-    }
-  });
-  console.log('Email transporter configured for development - emails will be logged to console');
-}
-
-// --- Authentication ---
-app.post('/api/auth/request-password-reset', async (req, res) => {
-  console.log('=== PASSWORD RESET REQUEST ===');
-  console.log('Request body:', JSON.stringify(req.body, null, 2));
-  
-  const { email } = req.body;
-  
-  if (!email) {
-    console.log('No email provided');
-    return res.status(400).json({ error: 'Email is required' });
-  }
-
-  try {
-    console.log('Looking for user with email:', email);
-    const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    
-    if (userResult.rows.length === 0) {
-      console.log('No user found with email:', email);
-      return res.json({ success: true, message: 'If an account exists with this email, a password reset link has been sent.' });
-    }
-
-    const user = userResult.rows[0];
-    console.log('User found:', { id: user.id, email: user.email });
-    
-    // Generate reset token
-    const resetToken = generateResetToken(user.email);
-    console.log('Generated reset token:', resetToken);
-    
-    // Create reset link (valid for 1 hour)
-    const resetLink = `http://localhost:8000/reset-password?token=${encodeURIComponent(resetToken)}&email=${encodeURIComponent(user.email)}`;
-    
-    console.log('\n=== PASSWORD RESET EMAIL ===');
-    console.log('To:', user.email);
-    console.log('Subject: Password Reset Request');
-    console.log('Reset Link:', resetLink);
-    console.log('This link will expire in 1 hour');
-    console.log('==============================\n');
-    
-    return res.json({ 
-      success: true, 
-      message: 'If an account exists with this email, a password reset link has been sent.' 
-    });
-  } catch (error) {
-    console.error('Error in password reset request:', error);
-    return res.status(500).json({ error: 'An error occurred while processing your request' });
-  }
-});
-
-app.post('/api/auth/reset-password', async (req, res) => {
-  console.log('=== PASSWORD RESET REQUEST ===');
-  console.log('Request body:', JSON.stringify(req.body, null, 2));
-  
-  const { email, token, newPassword } = req.body;
-  
-  if (!email || !token || !newPassword) {
-    const errorMsg = 'Email, token, and new password are required';
-    console.log('Validation error:', { email: !!email, token: !!token, hasPassword: !!newPassword });
-    return res.status(400).json({ success: false, message: errorMsg });
-  }
-
-  try {
-    // Check if user exists
-    const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    
-    if (userResult.rows.length === 0) {
-      console.log('No account found with email:', email);
-      return res.status(404).json({ 
-        success: false, 
-        message: 'No account found with this email' 
-      });
-    }
-
-    const user = userResult.rows[0];
-    
-    // Verify the token is valid for the current time window
-    const currentTimeWindow = Math.floor(Date.now() / (1000 * 60 * 60));
-    const currentTime = new Date();
-    console.log('Current time:', currentTime.toISOString());
-    console.log('Current time window:', currentTimeWindow);
-    console.log('Minutes into current window:', Math.floor((Date.now() % (1000 * 60 * 60)) / (1000 * 60)));
-    
-    const currentToken = generateResetToken(email);
-    console.log('Expected token:', currentToken);
-    console.log('Received token:', token);
-    
-    if (token !== currentToken) {
-      console.log('Invalid or expired token');
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid or expired token. Please request a new password reset.' 
-      });
-    }
-    
-    // Hash the new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
-    // Update user's password
-    await pool.query(
-      'UPDATE users SET password = $1 WHERE id = $2',
-      [hashedPassword, user.id]
-    );
-    
-    console.log('Password reset successful for user:', user.email);
-    
-    return res.json({ 
-      success: true, 
-      message: 'Your password has been reset successfully.' 
-    });
-    
-  } catch (error) {
-    console.error('Error resetting password:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'An error occurred while resetting your password.' 
-    });
-  }
-});
-
-// --- Authentication ---
+// --- AUTHENTIFICATION ---
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  console.log('Login attempt for:', email);
-
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
   }
-
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-
     if (result.rows.length === 0) {
-      console.log('Login failed: No user found for email', email);
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Identifiants invalides' });
     }
-
     const user = result.rows[0];
-
     const passwordMatch = await bcrypt.compare(password, user.password);
-
     if (!passwordMatch) {
-      console.log('Login failed: Incorrect password for email', email);
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Identifiants invalides' });
     }
-
-    console.log('User authenticated:', user.email, 'Role:', user.role);
-
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        firstname: user.firstname,
-        lastname: user.lastname,
-        role: user.role,
-        status: user.status
-      }
-    });
+    delete user.password;
+    res.json({ user });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Erreur lors de la connexion :', error);
+    res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
 
-app.put('/api/user/change-password', async (req, res) => {
-  const { userId, newPassword } = req.body;
-
-  if (!userId || !newPassword) {
-    return res.status(400).json({ message: 'User ID and new password are required.' });
-  }
-
-  try {
-    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ message: 'User not found.' });
-    }
-
-    const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
-
-    await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashedNewPassword, userId]);
-
-    res.json({ success: true, message: 'Password updated successfully.' });
-
-  } catch (error) {
-    console.error('Error changing password:', error);
-    res.status(500).json({ message: 'Internal server error.' });
-  }
-});
-
-// --- Recruiters CRUD ---
+// --- RECRUITEURS CRUD ---
 app.get('/api/recruiters', async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT * FROM users WHERE role = 'recruiter' AND status = 'active' ORDER BY lastname, firstname"
-    );
+    const result = await pool.query("SELECT * FROM users WHERE role = 'recruiter' ORDER BY lastname, firstname");
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching recruiters:', error);
@@ -335,82 +148,25 @@ app.get('/api/recruiters', async (req, res) => {
 });
 
 app.post('/api/recruiters', async (req, res) => {
-  const { firstname, lastname, email, status = 'active' } = req.body;
-
+  const { firstname, lastname, email, status = 'active', password = 'temp123' } = req.body;
   if (!firstname || !lastname || !email) {
     return res.status(400).json({ error: 'firstname, lastname, and email are required' });
   }
-
   try {
-    const defaultPassword = email.split('@')[0];
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(defaultPassword, saltRounds);
-
-    console.log('Starting transaction...');
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      console.log('Transaction started');
-
-      console.log('Inserting user...');
-      const result = await client.query(
-        `INSERT INTO users (firstname, lastname, email, password, role, status, created_at) 
-         VALUES ($1, $2, $3, $4, 'recruiter', $5, NOW()) RETURNING *`,
-        [firstname, lastname, email, hashedPassword, status]
-      );
-      console.log('User inserted:', result.rows[0].email);
-
-      const userId = result.rows[0].id;
-      
-      console.log('Inserting recruiter rights for user ID:', userId);
-      // Création des droits par défaut pour le recruteur
-      const rightsResult = await client.query(
-        `INSERT INTO recruiter_rights (user_id, view_candidates, create_candidates, 
-          modify_candidates, view_interviews, create_interviews, modify_interviews, 
-          modify_statuses, modify_stages, created_at)
-         VALUES ($1, true, true, true, true, true, true, false, false, NOW())
-         RETURNING *`,
-        [userId]
-      );
-      console.log('Recruiter rights inserted:', rightsResult.rows[0]);
-
-      // Do not return the hashed password, but include the default password
-      const { password, ...userWithoutPassword } = result.rows[0];
-      const response = {
-        ...userWithoutPassword,
-        defaultPassword: defaultPassword
-      };
-
-      await client.query('COMMIT');
-      console.log('Transaction committed successfully');
-      
-      // Envoyer la réponse après la validation de la transaction
-      res.status(201).json(response);
-    } catch (error) {
-      console.error('Error in transaction:', error);
-      await client.query('ROLLBACK');
-      console.log('Transaction rolled back');
-      throw error; // Propager l'erreur pour qu'elle soit gérée par le bloc catch externe
-    } finally {
-      client.release();
-    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      `INSERT INTO users (firstname, lastname, email, password, role, status, created_at) 
+       VALUES ($1, $2, $3, $4, 'recruiter', $5, NOW()) RETURNING *`,
+      [firstname, lastname, email, hashedPassword, status]
+    );
+    res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error adding recruiter:', error);
-    
-    // Gestion des erreurs spécifiques
-    if (error.code === '23505') { // Violation de contrainte d'unicité
-      return res.status(409).json({ 
-        error: 'Email déjà utilisé',
-        details: 'Un utilisateur avec cette adresse email existe déjà',
-        field: 'email'
-      });
+    if (error.code === '23505') {
+      res.status(409).json({ error: 'A user with this email already exists' });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
     }
-    
-    // Gestion des autres erreurs
-    res.status(500).json({ 
-      error: 'Erreur interne du serveur',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
   }
 });
 
@@ -418,25 +174,20 @@ app.put('/api/recruiters/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   const recruiterId = parseInt(id, 10);
-
   if (isNaN(recruiterId)) {
     return res.status(400).json({ message: 'Invalid recruiter ID' });
   }
-
   if (typeof status !== 'string' || !['active', 'disabled'].includes(status)) {
     return res.status(400).json({ message: 'Invalid status. Must be "active" or "disabled".' });
   }
-
   try {
     const result = await pool.query(
       'UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2 AND role = \'recruiter\' RETURNING *',
       [status, recruiterId]
     );
-
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Recruiter not found' });
     }
-
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating recruiter status:', error);
@@ -447,21 +198,17 @@ app.put('/api/recruiters/:id/status', async (req, res) => {
 app.delete('/api/recruiters/:id', async (req, res) => {
   const { id } = req.params;
   const recruiterId = parseInt(id, 10);
-
   if (isNaN(recruiterId)) {
     return res.status(400).json({ message: 'Invalid recruiter ID' });
   }
-
   try {
     const result = await pool.query(
       'DELETE FROM users WHERE id = $1 AND role = \'recruiter\' RETURNING *',
       [recruiterId]
     );
-
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Recruiter not found' });
     }
-
     res.json({ success: true, message: 'Recruiter successfully deleted' });
   } catch (error) {
     console.error('Error deleting recruiter:', error);
@@ -469,22 +216,13 @@ app.delete('/api/recruiters/:id', async (req, res) => {
   }
 });
 
-// --- Candidates CRUD ---
-// Récupérer tous les candidats
+// --- CANDIDATS CRUD ---
 app.get('/api/candidates', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
-        c.*, 
-        u.firstname, 
-        u.lastname, 
-        u.email,
-        r.firstname as recruiter_firstname,
-        r.lastname as recruiter_lastname,
-        r.email as recruiter_email
+      SELECT c.*, u.firstname, u.lastname, u.email 
       FROM candidates c 
       JOIN users u ON c.users_id = u.id 
-      LEFT JOIN users r ON c.recruiter_id = r.id
       ORDER BY u.lastname, u.firstname
     `);
     res.json(result.rows);
@@ -494,64 +232,27 @@ app.get('/api/candidates', async (req, res) => {
   }
 });
 
-// Récupérer un candidat spécifique
-app.get('/api/candidates/:id', async (req, res) => {
-  const { id } = req.params;
-  
-  try {
-    const result = await pool.query(
-      `SELECT c.*, u.firstname, u.lastname, u.email 
-       FROM candidates c 
-       JOIN users u ON c.users_id = u.id 
-       WHERE c.id = $1`,
-      [id]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Candidat non trouvé' });
-    }
-    
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Error fetching candidate:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Créer un nouveau candidat
 app.post('/api/candidates', async (req, res) => {
-  const { 
-    firstname, lastname, email, position, 
-    current_stage = 'soft_skills', status = 'in_progress', 
-    salary_expectation, phone, experience, recruiter_id, last_interview_date
-  } = req.body;
-
+  const { firstname, lastname, email, position, current_stage = 'soft_skills', status = 'in_progress', salary_expectation, phone, experience, recruiter_id, last_interview_date } = req.body;
   if (!firstname || !lastname || !email || !position) {
     return res.status(400).json({ error: 'firstname, lastname, email, and position are required' });
   }
-
   try {
     await pool.query('BEGIN');
-
-    // Generate password from email (everything before @)
     const password = email.split('@')[0];
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const hashedPassword = await bcrypt.hash(password, 10);
     const userResult = await pool.query(
       `INSERT INTO users (firstname, lastname, email, password, role, status, created_at) 
        VALUES ($1, $2, $3, $4, 'candidate', 'active', NOW()) RETURNING *`,
       [firstname, lastname, email, hashedPassword]
     );
-    const userId = userResult.rows[0].id;
-
     const candidateResult = await pool.query(
       `INSERT INTO candidates (users_id, position, current_stage, status, salary_expectation, phone, experience, recruiter_id, last_interview_date, created_at) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) 
        RETURNING *`,
-      [userId, position, current_stage, status, salary_expectation, phone, experience, recruiter_id, last_interview_date]
+      [userResult.rows[0].id, position, current_stage, status, salary_expectation, phone, experience, recruiter_id, last_interview_date]
     );
-
     await pool.query('COMMIT');
-
     const result = { ...candidateResult.rows[0], ...userResult.rows[0] };
     res.status(201).json(result);
   } catch (error) {
@@ -562,31 +263,6 @@ app.post('/api/candidates', async (req, res) => {
     } else {
       res.status(500).json({ error: 'Internal server error' });
     }
-  }
-});
-
-// Mettre à jour un candidat existant
-// Mettre à jour uniquement le stage d'un candidat
-app.patch('/api/candidates/:id/stage', async (req, res) => {
-  const { id } = req.params;
-  const { current_stage } = req.body;
-  console.log(`[PATCH /api/candidates/${id}/stage] Body:`, req.body);
-  if (!current_stage) {
-    return res.status(400).json({ error: 'current_stage is required' });
-  }
-  try {
-    const result = await pool.query(
-      `UPDATE candidates SET current_stage = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-      [current_stage, id]
-    );
-    console.log(`[PATCH /api/candidates/${id}/stage] SQL result:`, result.rows);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Candidate not found' });
-    }
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error(`[PATCH /api/candidates/${id}/stage] Error:`, error);
-    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -669,43 +345,150 @@ app.patch('/api/candidates/:id', async (req, res) => {
   }
 });
 
-// Supprimer un candidat
-app.delete('/api/candidates/:id', async (req, res) => {
-  const { id } = req.params;
-  
+// --- PIPELINE STAGES CRUD ---
+// Récupérer toutes les étapes du pipeline
+app.get('/api/pipeline-stages', async (req, res) => {
   try {
-    await pool.query('BEGIN');
-    
-    // Récupérer l'ID de l'utilisateur avant de supprimer le candidat
-    const candidateResult = await pool.query(
-      'SELECT users_id FROM candidates WHERE id = $1',
-      [id]
-    );
-    
-    if (candidateResult.rows.length === 0) {
-      await pool.query('ROLLBACK');
-      return res.status(404).json({ error: 'Candidat non trouvé' });
-    }
-    
-    const userId = candidateResult.rows[0].user_id;
-    
-    // Supprimer le candidat
-    await pool.query('DELETE FROM candidates WHERE id = $1', [id]);
-    
-    // Supprimer l'utilisateur associé
-    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
-    
-    await pool.query('COMMIT');
-    
-    res.status(204).send();
+    const result = await pool.query('SELECT * FROM pipeline_stages ORDER BY stage_order ASC');
+    res.json(result.rows);
   } catch (error) {
-    await pool.query('ROLLBACK');
-    console.error('Error deleting candidate:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error fetching pipeline stages:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// --- Interviews CRUD ---
+// Créer une nouvelle étape du pipeline
+app.post('/api/pipeline-stages', async (req, res) => {
+  const { name, description, stage_order = 0, is_active = true } = req.body;
+  if (!name) {
+    return res.status(400).json({ message: 'Name is required' });
+  }
+  const id = `stage_${Date.now()}`;
+  try {
+    const result = await pool.query(
+      'INSERT INTO pipeline_stages (id, name, description, stage_order, is_active, created_at) VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *',
+      [id, name, description, stage_order, is_active]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating pipeline stage:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Mettre à jour une étape du pipeline
+app.put('/api/pipeline-stages/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, description, stage_order, is_active } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE pipeline_stages SET name = $1, description = $2, stage_order = $3, is_active = $4 WHERE id = $5 RETURNING *',
+      [name, description, stage_order, is_active, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Pipeline stage not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating pipeline stage:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Mettre à jour le statut d'une étape du pipeline
+app.put('/api/pipeline-stages/:id/status', async (req, res) => {
+  const { id } = req.params;
+  const { is_active } = req.body;
+  const activeStatus = typeof is_active === 'string' ? is_active === 'true' : !!is_active;
+  try {
+    const result = await pool.query(
+      'UPDATE pipeline_stages SET is_active = $1 WHERE id = $2 RETURNING *',
+      [activeStatus, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Pipeline stage not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating pipeline stage status:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Supprimer une étape du pipeline
+app.delete('/api/pipeline-stages/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query('DELETE FROM pipeline_stages WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length > 0) {
+      res.json({ success: true, message: 'Pipeline stage successfully deleted' });
+    } else {
+      res.status(404).json({ error: 'Pipeline stage not found' });
+    }
+  } catch (error) {
+    console.error('Error deleting pipeline stage:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// --- UPLOAD DE CV (corrigé) ---
+app.post('/api/candidates/:id/cv', uploadCV.single('cv'), async (req, res) => {
+  const { id } = req.params;
+  if (!req.file) {
+    console.error('[CV UPLOAD] Aucun fichier reçu');
+    return res.status(400).json({ error: "Aucun fichier n'a été fourni ou le format est incorrect." });
+  }
+  try {
+    // 1. Récupérer le prénom et le nom du candidat en base
+    const candidateResult = await pool.query('SELECT firstname, lastname FROM users WHERE id = (SELECT users_id FROM candidates WHERE id = $1)', [id]);
+    if (candidateResult.rows.length === 0) {
+      fs.unlinkSync(req.file.path);
+      console.error('[CV UPLOAD] Candidat non trouvé, suppression du fichier uploadé');
+      return res.status(404).json({ error: "Candidat non trouvé." });
+    }
+    const { firstname, lastname } = candidateResult.rows[0];
+    // 2. Générer le nouveau nom de fichier
+    const timestamp = Date.now();
+    const extension = path.extname(req.file.originalname);
+    const safeFirstname = (firstname || 'unknown').replace(/[^a-zA-Z0-9-_]/g, '');
+    const safeLastname = (lastname || 'unknown').replace(/[^a-zA-Z0-9-_]/g, '');
+    const newFilename = `${safeFirstname}_${safeLastname}_${timestamp}${extension}`;
+    const newRelativePath = `/uploads/cvs/${newFilename}`;
+    const newFullPath = path.join(__dirname, 'uploads', 'cvs', newFilename);
+    // 3. Renommer le fichier sur le disque
+    fs.renameSync(req.file.path, newFullPath);
+    // 4. Mettre à jour la base avec le nouveau nom et le nom original
+    const result = await pool.query(
+      'UPDATE candidates SET cv_url = $1, cv_original_filename = $2 WHERE id = $3 RETURNING *',
+      [newRelativePath, req.file.originalname, id]
+    );
+    res.status(200).json({ 
+      message: 'CV uploadé avec succès.',
+      candidate: result.rows[0]
+    });
+  } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    console.error("Erreur lors de la sauvegarde du CV :", error);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Ajout de logs pour le téléchargement des fichiers statiques
+app.use('/uploads', (req, res, next) => {
+  const filePath = path.join(__dirname, 'uploads', req.path);
+  console.log(`[DOWNLOAD] Requête pour : ${req.path}`);
+  if (fs.existsSync(filePath)) {
+    const stats = fs.statSync(filePath);
+    console.log(`[DOWNLOAD] Fichier trouvé : ${filePath} (${stats.size} octets)`);
+  } else {
+    console.warn(`[DOWNLOAD] Fichier NON trouvé : ${filePath}`);
+  }
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
+
+// --- INTERVIEWS CRUD ---
 // Récupérer tous les entretiens
 app.get('/api/interviews', async (req, res) => {
   try {
@@ -731,7 +514,6 @@ app.get('/api/interviews', async (req, res) => {
 // Récupérer les entretiens d'un candidat
 app.get('/api/interviews/candidate/:candidateId', async (req, res) => {
   const { candidateId } = req.params;
-  
   try {
     const result = await pool.query(
       `SELECT i.*, 
@@ -743,7 +525,6 @@ app.get('/api/interviews/candidate/:candidateId', async (req, res) => {
        ORDER BY i.scheduled_date DESC`,
       [candidateId]
     );
-    
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching candidate interviews:', error);
@@ -754,11 +535,9 @@ app.get('/api/interviews/candidate/:candidateId', async (req, res) => {
 // Créer un nouvel entretien
 app.post('/api/interviews', async (req, res) => {
   const { candidate_id, recruiter_id, scheduled_at, duration, notes } = req.body;
-  
   if (!candidate_id || !scheduled_at) {
     return res.status(400).json({ error: 'candidate_id and scheduled_at are required' });
   }
-  
   try {
     const result = await pool.query(
       `INSERT INTO interviews 
@@ -767,7 +546,6 @@ app.post('/api/interviews', async (req, res) => {
        RETURNING *`,
       [candidate_id, recruiter_id, scheduled_at, duration, notes]
     );
-    
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating interview:', error);
@@ -779,7 +557,6 @@ app.post('/api/interviews', async (req, res) => {
 app.put('/api/interviews/:id', async (req, res) => {
   const { id } = req.params;
   const { candidate_id, recruiter_id, scheduled_at, duration, notes } = req.body;
-  
   try {
     const result = await pool.query(
       `UPDATE interviews 
@@ -793,11 +570,9 @@ app.put('/api/interviews/:id', async (req, res) => {
        RETURNING *`,
       [candidate_id, recruiter_id, scheduled_at, duration, notes, id]
     );
-    
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Entretien non trouvé' });
     }
-    
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating interview:', error);
@@ -805,21 +580,17 @@ app.put('/api/interviews/:id', async (req, res) => {
   }
 });
 
-
 // Supprimer un entretien
 app.delete('/api/interviews/:id', async (req, res) => {
   const { id } = req.params;
-  
   try {
     const result = await pool.query(
       'DELETE FROM interviews WHERE id = $1 RETURNING *',
       [id]
     );
-    
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Entretien non trouvé' });
     }
-    
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting interview:', error);
@@ -827,138 +598,27 @@ app.delete('/api/interviews/:id', async (req, res) => {
   }
 });
 
-// --- Pipeline Stages CRUD ---
-// Récupérer toutes les étapes du pipeline
-app.get('/api/pipeline-stages', async (req, res) => {
-  try {
-    console.log('GET /api/pipeline-stages - Fetching pipeline stages');
-    const result = await pool.query('SELECT * FROM pipeline_stages ORDER BY stage_order ASC');
-    console.log('Pipeline stages fetched:', result.rows.length);
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching pipeline stages:', error);
-    res.status(500).json({ message: 'Internal server error' });
+// --- CHANGEMENT DE MOT DE PASSE UTILISATEUR ---
+app.put('/api/user/change-password', async (req, res) => {
+  const { userId, newPassword } = req.body;
+  if (!userId || !newPassword) {
+    return res.status(400).json({ message: 'User ID and new password are required.' });
   }
-});
-
-app.post('/api/pipeline-stages', async (req, res) => {
-  const { name, description, stage_order = 0, is_active = true } = req.body;
-  
-  console.log('POST /api/pipeline-stages - Request body:', req.body);
-
-  if (!name) {
-    console.log('Pipeline stage creation failed: Name is required');
-    return res.status(400).json({ message: 'Name is required' });
-  }
-
-  const id = `stage_${Date.now()}`;
-
   try {
-    const result = await pool.query(
-      'INSERT INTO pipeline_stages (id, name, description, stage_order, is_active, created_at) VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *',
-      [id, name, description, stage_order, is_active]
-    );
-    console.log('Pipeline stage created successfully:', result.rows[0]);
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error('Error creating pipeline stage:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-app.put('/api/pipeline-stages/:id', async (req, res) => {
-  const { id } = req.params;
-  const { name, description, stage_order, is_active } = req.body;
-
-  console.log(`PUT /api/pipeline-stages/${id} - Request params:`, req.params);
-  console.log(`PUT /api/pipeline-stages/${id} - Request body:`, req.body);
-
-  try {
-    const result = await pool.query(
-      'UPDATE pipeline_stages SET name = $1, description = $2, stage_order = $3, is_active = $4 WHERE id = $5 RETURNING *',
-      [name, description, stage_order, is_active, id]
-    );
-
-    console.log(`Pipeline stage update query executed, affected rows: ${result.rows.length}`);
-
-    if (result.rows.length === 0) {
-      console.log(`Pipeline stage with ID ${id} not found`);
-      return res.status(404).json({ message: 'Pipeline stage not found' });
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found.' });
     }
-
-    console.log('Pipeline stage updated successfully:', result.rows[0]);
-    res.json(result.rows[0]);
+    const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+    await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashedNewPassword, userId]);
+    res.json({ success: true, message: 'Password updated successfully.' });
   } catch (error) {
-    console.error('Error updating pipeline stage:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('Error changing password:', error);
+    res.status(500).json({ message: 'Internal server error.' });
   }
 });
 
-app.put('/api/pipeline-stages/:id/status', async (req, res) => {
-  const { id } = req.params;
-  const { is_active } = req.body;
-
-  console.log(`PUT /api/pipeline-stages/${id}/status - Request params:`, req.params);
-  console.log(`PUT /api/pipeline-stages/${id}/status - Request body:`, req.body);
-  console.log(`Stage ID: ${id}, is_active: ${is_active} (type: ${typeof is_active})`);
-
-  const activeStatus = typeof is_active === 'string' ? is_active === 'true' : !!is_active;
-
-  try {
-    console.log(`✅ Validation passed. Updating pipeline stage ${id} status to ${activeStatus}`);
-    const result = await pool.query(
-      'UPDATE pipeline_stages SET is_active = $1 WHERE id = $2 RETURNING *',
-      [activeStatus, id]
-    );
-
-    console.log(`Query result rows: ${result.rows.length}`);
-
-    if (result.rows.length === 0) {
-      console.log(`Pipeline stage with ID ${id} not found`);
-      return res.status(404).json({ message: 'Pipeline stage not found' });
-    }
-
-    console.log('✅ Status updated successfully:', result.rows[0]);
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Error updating pipeline stage status:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-app.delete('/api/pipeline-stages/:id', async (req, res) => {
-  const { id } = req.params;
-  
-  try {
-    // Vérifier si l'étape est utilisée par des candidats
-    const candidatesCount = await pool.query(
-      'SELECT COUNT(*) FROM candidates WHERE current_stage_id = $1',
-      [id]
-    );
-    
-    if (parseInt(candidatesCount.rows[0].count) > 0) {
-      return res.status(400).json({ 
-        error: 'Impossible de supprimer cette étape car elle est utilisée par un ou plusieurs candidats' 
-      });
-    }
-    
-    const result = await pool.query(
-      'DELETE FROM pipeline_stages WHERE id = $1 RETURNING *',
-      [id]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Étape du pipeline non trouvée' });
-    }
-    
-    res.status(204).send();
-  } catch (error) {
-    console.error('Error deleting pipeline stage:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Mettre à jour les droits d'un recruteur
+// --- DROITS RECRUTEUR ---
 app.put('/api/recruiter-rights/:user_id', async (req, res) => {
   const { user_id } = req.params;
   const {
@@ -971,10 +631,6 @@ app.put('/api/recruiter-rights/:user_id', async (req, res) => {
     modify_statuses,
     modify_stages
   } = req.body;
-
-  console.log(`PUT /api/recruiter-rights/${user_id} - Request params:`, req.params);
-  console.log(`PUT /api/recruiter-rights/${user_id} - Request body:`, req.body);
-
   try {
     // Vérifier si la ligne existe déjà
     const check = await pool.query('SELECT * FROM recruiter_rights WHERE user_id = $1', [user_id]);
@@ -1005,7 +661,6 @@ app.put('/api/recruiter-rights/:user_id', async (req, res) => {
           user_id
         ]
       );
-      console.log('Recruiter rights updated:', result.rows[0]);
     } else {
       // Insert
       result = await pool.query(
@@ -1024,7 +679,6 @@ app.put('/api/recruiter-rights/:user_id', async (req, res) => {
           modify_stages
         ]
       );
-      console.log('Recruiter rights inserted:', result.rows[0]);
     }
     res.json(result.rows[0]);
   } catch (error) {
@@ -1033,7 +687,6 @@ app.put('/api/recruiter-rights/:user_id', async (req, res) => {
   }
 });
 
-// Récupérer tous les droits des recruteurs
 app.get('/api/recruiter-rights', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM recruiter_rights');
@@ -1044,25 +697,16 @@ app.get('/api/recruiter-rights', async (req, res) => {
   }
 });
 
-// Démarrer le serveur
-app.listen(port, () => {
-  console.log(`✅ Serveur API démarré sur http://localhost:${port}`);
-});
-
-// Mettre à jour un statut candidat (nom et activation)
+// --- STATUTS CANDIDATS ---
 app.put('/api/candidate-status/:id', async (req, res) => {
   const { id } = req.params;
   const { name, is_active } = req.body;
-  console.log(`[CANDIDATE STATUS] PUT /api/candidate-status/${id} - Body:`, req.body);
   try {
     const query = 'UPDATE candidate_statuses SET name = $1, is_active = $2, updated_at = NOW() WHERE id = $3 RETURNING *';
-    console.log('[CANDIDATE STATUS] SQL:', query, [name, is_active, id]);
     const result = await pool.query(query, [name, is_active, id]);
     if (result.rows.length === 0) {
-      console.log('[CANDIDATE STATUS] Not found for id:', id);
       return res.status(404).json({ error: 'Status not found' });
     }
-    console.log('[CANDIDATE STATUS] Updated:', result.rows[0]);
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating candidate status:', error);
@@ -1070,7 +714,6 @@ app.put('/api/candidate-status/:id', async (req, res) => {
   }
 });
 
-// Récupérer tous les statuts candidats
 app.get('/api/candidate-status', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM candidate_statuses');
@@ -1081,40 +724,7 @@ app.get('/api/candidate-status', async (req, res) => {
   }
 });
 
-// Upload CV pour un candidat
-app.post('/api/candidates/:id/cv', upload.single('cv'), async (req, res) => {
-  try {
-    const candidateId = req.params.id;
-    if (!req.file) {
-      return res.status(400).json({ error: 'Aucun fichier fourni' });
-    }
-    // Vérifier si ce nom de fichier est déjà utilisé par un autre candidat
-    const existing = await pool.query('SELECT id FROM candidates WHERE cv_url = $1 AND id != $2', [`/uploads/${req.file.originalname}`, candidateId]);
-    if (existing.rows.length > 0) {
-      // Supprimer le fichier uploadé pour ne pas polluer le dossier
-      fs.unlinkSync(req.file.path);
-      return res.status(409).json({ error: 'This CV file is already used by another candidate.' });
-    }
-    // Construire l'URL du fichier
-    const cvUrl = `/uploads/${req.file.originalname}`;
-    // Mettre à jour le candidat avec l'URL du CV
-    const result = await pool.query(
-      'UPDATE candidates SET cv_url = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-      [cvUrl, candidateId]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Candidat non trouvé' });
-    }
-    res.json({ 
-      message: 'CV uploadé avec succès',
-      cv_url: cvUrl,
-      candidate: result.rows[0]
-    });
-  } catch (error) {
-    console.error('[CV UPLOAD] Erreur:', error);
-    res.status(500).json({ error: 'Erreur lors de l\'upload du CV' });
-  }
-});
-
-// Servir les fichiers uploadés
-app.use('/uploads', express.static('uploads'));
+// --- DÉMARRAGE DU SERVEUR ---
+app.listen(port, () => {
+  console.log(`✅ Serveur API démarré sur http://localhost:${port}`);
+}); 

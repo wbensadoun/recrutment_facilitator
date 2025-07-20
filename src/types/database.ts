@@ -39,6 +39,7 @@ export interface Candidate {
   recruiter_lastname?: string;
   recruiter_email?: string;
   stage_name?: string; // Nom de l'étape du pipeline (remplace current_stage)
+  cv_original_filename?: string;
 }
 
 export interface PipelineStage {

@@ -28,16 +28,16 @@ const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvU
     if (file) {
       if (file.type !== 'application/pdf') {
         toast({
-          title: "Format non supporté",
-          description: "Seuls les fichiers PDF sont acceptés",
+          title: "Unsupported format",
+          description: "Only PDF files are accepted",
           variant: "destructive",
         });
         return;
       }
       if (file.size > 10 * 1024 * 1024) { // 10MB limit
         toast({
-          title: "Fichier trop volumineux",
-          description: "Le fichier ne doit pas dépasser 10 MB",
+          title: "File too large",
+          description: "The file must not exceed 10 MB",
           variant: "destructive",
         });
         return;
@@ -49,23 +49,8 @@ const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvU
   const handleValidate = async () => {
     if (!selectedFile) return;
     setErrorMsg(null);
-    try {
-      const cvUrl = await uploadCV(selectedFile, candidateId);
-      if (cvUrl) {
-        toast({
-          title: "CV uploadé",
-          description: `Le CV de ${candidateName} a été mis à jour`,
-        });
-        onClose();
-      }
-    } catch (error: any) {
-      // Si erreur 409, afficher le message dans le modal sans fermer
-      if (error?.message?.includes('already used')) {
-        setErrorMsg('This CV file is already used by another candidate. Please select a different file.');
-      } else {
-        setErrorMsg('An error occurred while uploading the CV.');
-      }
-    }
+    onSelect(selectedFile);
+    onClose();
   };
 
   const handleClose = () => {
@@ -78,10 +63,10 @@ const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvU
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {currentCvUrl ? 'Remplacer le CV' : 'Ajouter un CV'} - {candidateName}
+            {currentCvUrl ? 'Replace CV' : 'Add CV'} - {candidateName}
           </DialogTitle>
           <DialogDescription>
-            Sélectionnez un fichier PDF pour {currentCvUrl ? 'remplacer' : 'ajouter'} le CV
+            Select a PDF file to {currentCvUrl ? 'replace' : 'add'} the CV
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -94,12 +79,12 @@ const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvU
             <div className="p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <FileText className="w-4 h-4" />
-                <span>CV actuel disponible</span>
+                <span>Current CV available</span>
               </div>
             </div>
           )}
           <div className="space-y-2">
-            <Label htmlFor="cv-file">Sélectionner un fichier PDF</Label>
+            <Label htmlFor="cv-file">Select a PDF file</Label>
             <Input
               id="cv-file"
               type="file"
@@ -118,8 +103,8 @@ const CVUploadModal = ({ isOpen, onClose, candidateId, candidateName, currentCvU
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={handleClose}>Annuler</Button>
-            <Button onClick={handleValidate} disabled={!selectedFile}>Valider</Button>
+            <Button variant="outline" onClick={handleClose}>Cancel</Button>
+            <Button onClick={handleValidate} disabled={!selectedFile}>Confirm</Button>
           </div>
         </div>
       </DialogContent>
