@@ -6,9 +6,9 @@ services:
     container_name: candidater-en-france-db
     restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: recruitment_facilitator
+      POSTGRES_USER: ${POSTGRES_USER_PROD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_PROD}
+      POSTGRES_DB: ${POSTGRES_DB_PROD}
 
     ports:
       - "5432:5432"
@@ -29,13 +29,13 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/recruitment_facilitator
+      DATABASE_URL: postgresql://${POSTGRES_USER_PROD}:${POSTGRES_PASSWORD_PROD}@postgres:5432/${POSTGRES_DB_PROD}
       PORT: 3000
-      RESET_SECRET: your-secure-secret-change-in-production
-      NODE_ENV: development
+      RESET_SECRET: ${RESET_SECRET_PROD}
+      NODE_ENV: production
       POSTGRES_HOST: postgres
-    volumes:
-      - ./src/server:/app/src/server
+    # volumes: # Désactivé pour la prod, le code est dans l'image
+    #   - ./src/server:/app/src/server
     networks:
       - app-network
 
@@ -51,7 +51,9 @@ services:
       - "8000:8000"
     networks:
       - app-network
-    command: npm run dev
+    command: serve -s dist -l 8000
+    # volumes: # Désactivé pour la prod
+    #   - ./src/client:/app/src/client
 
 networks:
   app-network:
@@ -59,5 +61,3 @@ networks:
 
 volumes:
   postgres_data:
-  backend_node_modules:
-  frontend_node_modules:

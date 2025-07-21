@@ -10,8 +10,14 @@ COPY . .
 # Installer les dépendances
 RUN npm install
 
+# Construire l'app pour la production
+RUN npm run build
+
+# Installer un serveur statique pour servir le build
+RUN npm install -g serve
+
 # Exposer le port 8000
 EXPOSE 8000
 
-# Commande de démarrage
-CMD ["npm", "run", "dev"]
+# Commande de démarrage pour servir le build
+CMD ["serve", "-s", "dist", "-l", "8000"]
