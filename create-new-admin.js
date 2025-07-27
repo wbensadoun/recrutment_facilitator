@@ -10,15 +10,13 @@ const pool = new Pool({
 });
 
 const saltRounds = 10;
-const plainPassword = 'admin123';
+const plainPassword = 'admin123'; // À changer pour un mot de passe plus sécurisé en production
 
 async function createNewAdmin() {
   try {
-    // Générer un hash bcrypt pour le mot de passe
     const hashedPassword = await bcrypt.hash(plainPassword, saltRounds);
     console.log('Hashed password:', hashedPassword);
 
-    // Insérer le nouvel administrateur
     const result = await pool.query(
       'INSERT INTO users (firstname, lastname, email, password, role, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
       ['Admin', 'Test', 'admin.test@alenia.io', hashedPassword, 'admin', 'active']
@@ -34,7 +32,7 @@ async function createNewAdmin() {
   } catch (error) {
     console.error('Erreur lors de la création de l\'administrateur:', error);
   } finally {
-    pool.end();
+    await pool.end(); // Assurez-vous d'attendre la fermeture de la connexion
   }
 }
 

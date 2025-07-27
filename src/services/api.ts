@@ -1,6 +1,8 @@
 import { ErrorCode, AppError } from '@/types/errors';
 import { handleApiError } from '@/utils/error-handler';
 
+// Configuration de l'API via variable d'environnement
+// Pour changer l'URL, modifiez VITE_API_URL dans le fichier .env
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export const api = {

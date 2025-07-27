@@ -111,7 +111,7 @@ const CalendarView = () => {
                 <div key={interview.id} className="bg-white p-4 rounded-lg border">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h4 className="font-medium text-gray-900">Candidat ID: {String(interview.candidate_id)}</h4>
+                      <h4 className="font-medium text-gray-900">{interview.candidate_firstname} {interview.candidate_lastname}</h4>
                       <p className="text-sm text-gray-600">Recruteur ID: {String(interview.recruiter_id)}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <Badge className={getStageColor(interview.stage)}>
@@ -158,7 +158,7 @@ const CalendarView = () => {
                   <div key={interview.id} className="p-4 border rounded-lg hover:shadow-sm transition-shadow">
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <h4 className="font-medium text-gray-900">Candidat ID: {String(interview.candidate_id)}</h4>
+                        <h4 className="font-medium text-gray-900">{interview.candidate_firstname} {interview.candidate_lastname}</h4>
                         <p className="text-sm text-gray-600">Recruteur: {interview.recruiter_firstname} {interview.recruiter_lastname}</p>
                       </div>
                       <Badge className={getStageColor(interview.stage)}>

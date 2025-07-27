@@ -5,7 +5,8 @@ import { CheckCircle, XCircle, Clock, MessageSquare, Calendar } from 'lucide-rea
 import { useCandidates } from '@/hooks/useCandidates';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useToast } from '@/hooks/use-toast';
-import { StageType, CandidateStatus } from '@/types/database';
+import { StageType } from '@/types/database';
+import { CandidateStatus } from '@/types/enums';
 import { useState } from 'react';
 import ScheduleInterviewModal from './ScheduleInterviewModal';
 import CandidateCommentsModal from './CandidateCommentsModal';
@@ -48,7 +49,7 @@ const Pipeline = () => {
 
   const getCandidatesForStage = (stageId: number) => {
     return candidates.filter(candidate => 
-      candidate.pipeline_stage_id === stageId && candidate.status !== 'rejected'
+      Number(candidate.current_stage) === stageId && candidate.status !== 'rejected'
     );
   };
 
@@ -72,7 +73,7 @@ const Pipeline = () => {
         
         // Mettre à jour l'étape du candidat
         await updateCandidateStage(candidateId, nextStage);
-        await updateCandidateStatus(candidateId, 'in_progress');
+        await updateCandidateStatus(candidateId, CandidateStatus.IN_PROGRESS);
         
         toast({
           title: "Candidate approved",
@@ -80,7 +81,7 @@ const Pipeline = () => {
         });
       } else {
         // Dernière étape, marquer comme validé
-        await updateCandidateStatus(candidateId, 'validated');
+        await updateCandidateStatus(candidateId, CandidateStatus.VALIDATED);
         toast({
           title: "Candidate approved",
           description: `${candidateName} has successfully completed the process`,
@@ -93,7 +94,7 @@ const Pipeline = () => {
 
   const handleNoGoDecision = async (candidateId: number, candidateName: string) => {
     try {
-      await updateCandidateStatus(candidateId, 'rejected');
+      await updateCandidateStatus(candidateId, CandidateStatus.REJECTED);
       toast({
         title: "Candidate rejected",
         description: `${candidateName} has been rejected`,

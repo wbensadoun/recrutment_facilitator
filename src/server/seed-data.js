@@ -1,8 +1,8 @@
-import pg from 'pg';
-import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
-import bcrypt from 'bcryptjs';
+const pg = require('pg');
+const dotenv = require('dotenv');
+const fs = require('fs');
+const path = require('path');
+const bcrypt = require('bcryptjs');
 
 dotenv.config();
 
@@ -18,7 +18,7 @@ async function insertData() {
   try {
     console.log('--- Starting Data Seeding ---');
 
-    const backupDir = path.resolve(process.cwd(), 'backup');
+    const backupDir = path.resolve(__dirname, '../../backup'); // Go up two levels to the project root
     const authUsersPath = path.join(backupDir, 'auth_users.json');
 
     if (fs.existsSync(authUsersPath)) {

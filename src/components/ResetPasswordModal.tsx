@@ -26,7 +26,7 @@ const ResetPasswordModal = ({ isOpen, onClose }: ResetPasswordModalProps) => {
         throw new Error('Please enter your email');
       }
 
-      const response = await fetch('http://localhost:3000/api/auth/request-password-reset', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/auth/request-password-reset`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

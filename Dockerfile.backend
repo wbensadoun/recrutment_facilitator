@@ -18,5 +18,11 @@ COPY src/server/ .
 # Exposer le port
 EXPOSE 3000
 
-# Commande de démarrage
-CMD ["node", "index.js"]
+# Rendre le script d'attente exécutable et l'installer
+RUN apk add --no-cache postgresql-client # Ajoute psql pour pouvoir tester la connexion
+# Convertit les fins de ligne de Windows (CRLF) en Unix (LF)
+RUN sed -i 's/\r$//' wait-for-postgres.sh
+RUN chmod +x wait-for-postgres.sh
+
+# Commande de démarrage avec attente de Postgres
+# La commande de démarrage est maintenant gérée dans docker-compose.yml

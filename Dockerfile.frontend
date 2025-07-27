@@ -1,5 +1,11 @@
 # Utiliser une image Node.js 18 Alpine comme base
-FROM node:18-alpine
+FROM node:18-slim AS build
+
+# Accepter l'argument VITE_API_URL
+ARG VITE_API_URL=http://localhost:3000/api
+
+# Définir la variable d'environnement pour le build
+ENV VITE_API_URL=$VITE_API_URL
 
 # Définir le répertoire de travail
 WORKDIR /app

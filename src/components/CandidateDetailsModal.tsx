@@ -23,9 +23,10 @@ interface CandidateDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   candidate: Candidate | null;
+  onUpdate: () => void;
 }
 
-const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsModalProps) => {
+const CandidateDetailsModal = ({ isOpen, onClose, candidate, onUpdate }: CandidateDetailsModalProps) => {
   const [formData, setFormData] = useState<{
     firstname: string;
     lastname: string;
@@ -53,7 +54,7 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCVUpload, setShowCVUpload] = useState(false);
-  const [selectedCVFile, setSelectedCVFile] = useState<File | null>(null);
+  
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { toast } = useToast();
   const { updateCandidateStatus, updateCandidateStage, updateCandidate } = useCandidates();
@@ -147,32 +148,14 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
       }
       
       // Si un fichier CV a été sélectionné, l'uploader maintenant
-      if (selectedCVFile) {
-        try {
-          const cvUrl = await uploadCV(selectedCVFile, String(candidate.id));
-          if (cvUrl) {
-            toast({
-              title: "CV uploaded",
-              description: `The CV of ${candidate.firstname} ${candidate.lastname} has been updated`,
-            });
-          }
-          setSelectedCVFile(null);
-        } catch (error: any) {
-          if (error?.message?.includes('already used')) {
-            setSubmitError('This CV file is already used by another candidate. Please select a different file.');
-            return; // Ne ferme pas le modal
-          } else {
-            setSubmitError('An error occurred while uploading the CV.');
-            return;
-          }
-        }
-      }
+      
 
       toast({
         title: "Candidate updated",
         description: `${candidate.firstname} ${candidate.lastname}'s information has been updated`,
       });
       
+            onUpdate();
       onClose();
     } catch (error) {
       setSubmitError('An error occurred while updating the candidate.');
@@ -481,7 +464,27 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate }: CandidateDetailsM
             candidateId={candidate.id.toString()}
             candidateName={`${candidate.firstname} ${candidate.lastname}`}
             currentCvUrl={candidate.cv_url || ''}
-            onSelect={(file) => setSelectedCVFile(file)}
+            onSelect={async (file) => {
+            if (!candidate) return;
+            try {
+              const cvUrl = await uploadCV(file, String(candidate.id));
+              if (cvUrl) {
+                toast({
+                  title: "CV Uploaded",
+                  description: `The CV for ${candidate.firstname} ${candidate.lastname} has been successfully updated.`,
+                });
+                onUpdate(); // Refresh parent data
+              }
+            } catch (error: any) {
+              console.error("CV Upload error:", error);
+              toast({
+                title: "Upload Failed",
+                description: error.message || "An error occurred while uploading the CV.",
+                variant: "destructive",
+              });
+            }
+            setShowCVUpload(false); // Close the upload modal
+          }}
           />
         )}
       </DialogContent>

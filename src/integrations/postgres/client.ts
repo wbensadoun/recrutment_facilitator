@@ -332,6 +332,6 @@ class PostgresClient {
 }
 
 // Exporter une instance du client PostgreSQL
-const postgres = new PostgresClient();
+export const postgres = new PostgresClient();
 
 // Nettoyage : suppression de l'alias supabase et de la simulation d'API Supabase

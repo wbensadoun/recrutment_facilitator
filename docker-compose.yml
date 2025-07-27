@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   postgres:
@@ -33,9 +33,16 @@ services:
       PORT: 3000
       RESET_SECRET: ${RESET_SECRET_PROD}
       NODE_ENV: production
-      POSTGRES_HOST: postgres
-    # volumes: # Désactivé pour la prod, le code est dans l'image
-    #   - ./src/server:/app/src/server
+      # Database connection variables that the backend code expects
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER_PROD}
+      DB_PASSWORD: ${POSTGRES_PASSWORD_PROD}
+      DB_NAME: ${POSTGRES_DB_PROD}
+    command: ["sh", "-c", "sleep 10 && node index.js"]
+    volumes:
+      # Partage le dossier backup pour que le script de seeding puisse trouver le fichier JSON
+      - ./backup:/app/backup
     networks:
       - app-network
 
@@ -43,12 +50,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        - VITE_API_URL=http://localhost:3000/api
     container_name: candidater-en-france-frontend
     restart: always
     depends_on:
       - backend
     ports:
       - "8000:8000"
+    environment:
+      - VITE_API_URL=http://localhost:3000/api
     networks:
       - app-network
     command: serve -s dist -l 8000

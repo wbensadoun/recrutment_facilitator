@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/postgres/client';
+
 import { AlertCircle } from 'lucide-react';
 import { useContext } from 'react';
 import { AuthContext } from '@/contexts/AuthContext';
@@ -46,7 +46,7 @@ const ChangePasswordModal = ({ isOpen, onClose }: ChangePasswordModalProps) => {
     setLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:3000/api/user/change-password`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/user/change-password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

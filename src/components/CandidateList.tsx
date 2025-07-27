@@ -22,7 +22,7 @@ const CandidateList = () => {
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [selectedCandidateForSchedule, setSelectedCandidateForSchedule] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const { candidates, loading, deleteCandidate, updateCandidateStage, updateCandidate } = useCandidates();
+  const { candidates, loading, refetch, deleteCandidate, updateCandidateStage, updateCandidate } = useCandidates();
   const { deleteCV } = useCVUpload();
   const { stages: pipelineStages, loading: stagesLoading } = usePipelineStages();
 
@@ -134,12 +134,18 @@ const CandidateList = () => {
   };
 
   const handleDownloadCV = (cvUrl: string | null | undefined) => {
-    if (!cvUrl) return;
-    
+    if (!cvUrl) {
+      console.error('No CV URL provided');
+      return;
+    }
+
     try {
       const fileName = cvUrl.split('/').pop() || 'cv.pdf';
+      const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace('/api', '');
+      const fullUrl = `${API_URL}${cvUrl}`;
+      
       const link = document.createElement('a');
-      link.href = cvUrl;
+      link.href = fullUrl;
       link.download = fileName;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
@@ -296,13 +302,17 @@ const CandidateList = () => {
       {/* Modals */}
       <DynamicAddCandidateModal 
         isOpen={showAddModal} 
-        onClose={() => setShowAddModal(false)} 
+        onClose={() => {
+        setShowAddModal(false);
+        refetch();
+      }} 
       />
       
       <CandidateDetailsModal
         isOpen={showDetailsModal}
         onClose={() => setShowDetailsModal(false)}
         candidate={selectedCandidate}
+        onUpdate={refetch}
       />
 
       <ScheduleInterviewModal
