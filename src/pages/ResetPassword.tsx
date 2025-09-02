@@ -24,13 +24,15 @@ const ResetPassword = () => {
     const tokenParam = searchParams.get('token');
     const emailParam = searchParams.get('email');
     
-    if (!tokenParam || !emailParam) {
+    if (!tokenParam) {
       setError('Invalid reset link. Please request a new password reset link.');
       return;
     }
     
     setToken(tokenParam);
-    setEmail(decodeURIComponent(emailParam));
+    if (emailParam) {
+      setEmail(decodeURIComponent(emailParam));
+    }
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,7 +55,6 @@ const ResetPassword = () => {
         },
         body: JSON.stringify({ 
           token,
-          email,
           newPassword: password 
         })
       });

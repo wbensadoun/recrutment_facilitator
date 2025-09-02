@@ -9,12 +9,20 @@ services:
       POSTGRES_USER: ${POSTGRES_USER_PROD}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_PROD}
       POSTGRES_DB: ${POSTGRES_DB_PROD}
-
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER_PROD} -d ${POSTGRES_DB_PROD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backup:/backup
+      # Mount initialization scripts
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+      - ./latest_backup.sql:/docker-entrypoint-initdb.d/02-latest_backup.sql
+      - ./sample_data.sql:/docker-entrypoint-initdb.d/03-sample_data.sql
     networks:
       - app-network
 
@@ -25,12 +33,13 @@ services:
     container_name: candidater-en-france-backend
     restart: always
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
-      - "3000:3000"
+      - "${API_PORT_PROD:-3000}:${API_PORT_PROD:-3000}"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER_PROD}:${POSTGRES_PASSWORD_PROD}@postgres:5432/${POSTGRES_DB_PROD}
-      PORT: 3000
+      PORT: ${API_PORT_PROD:-3000}
       RESET_SECRET: ${RESET_SECRET_PROD}
       NODE_ENV: production
       # Database connection variables that the backend code expects
@@ -39,6 +48,15 @@ services:
       DB_USER: ${POSTGRES_USER_PROD}
       DB_PASSWORD: ${POSTGRES_PASSWORD_PROD}
       DB_NAME: ${POSTGRES_DB_PROD}
+      # SMTP configuration
+      SMTP_HOST_PROD: ${SMTP_HOST_PROD}
+      SMTP_PORT_PROD: ${SMTP_PORT_PROD}
+      SMTP_USER_PROD: ${SMTP_USER_PROD}
+      SMTP_PASSWORD_PROD: ${SMTP_PASSWORD_PROD}
+      SMTP_FROM_PROD: ${SMTP_FROM_PROD}
+      SMTP_SECURE_PROD: ${SMTP_SECURE_PROD}
+      # App URL for email links
+      APP_URL_PROD: http://${FRONTEND_HOST_PROD:-localhost}:${FRONTEND_PORT_PROD:-8000}
     command: ["sh", "-c", "sleep 10 && node index.js"]
     volumes:
       # Partage le dossier backup pour que le script de seeding puisse trouver le fichier JSON
@@ -51,15 +69,15 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        - VITE_API_URL=http://localhost:3000/api
+        - VITE_API_URL=http://${API_HOST_PROD:-localhost}:${API_PORT_PROD:-3000}/api
     container_name: candidater-en-france-frontend
     restart: always
     depends_on:
       - backend
     ports:
-      - "8000:8000"
+      - "${FRONTEND_PORT_PROD:-8000}:8000"
     environment:
-      - VITE_API_URL=http://localhost:3000/api
+      - VITE_API_URL=http://${API_HOST_PROD:-localhost}:${API_PORT_PROD:-3000}/api
     networks:
       - app-network
     command: serve -s dist -l 8000

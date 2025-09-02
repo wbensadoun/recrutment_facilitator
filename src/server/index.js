@@ -9,10 +9,32 @@ const multer = require('multer');
 const fs = require('fs');
 
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const port = parseInt(process.env.PORT, 10) || 3000;
 const saltRounds = 10; // For bcrypt
+
+// --- EMAIL CONFIGURATION ---
+const createEmailTransporter = () => {
+  // Use production SMTP settings if available, fallback to development
+  const smtpConfig = {
+    host: process.env.SMTP_HOST_PROD || process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT_PROD || process.env.SMTP_PORT) || 587,
+    secure: (process.env.SMTP_SECURE_PROD || process.env.SMTP_SECURE) === 'true',
+    auth: {
+      user: process.env.SMTP_USER_PROD || process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD_PROD || process.env.SMTP_PASSWORD
+    }
+  };
+
+  // Validate SMTP configuration
+  if (!smtpConfig.host || !smtpConfig.auth.user || !smtpConfig.auth.pass) {
+    throw new Error('SMTP configuration incomplete. Please check SMTP_HOST, SMTP_USER, and SMTP_PASSWORD environment variables.');
+  }
+
+  return nodemailer.createTransport(smtpConfig);
+};
 
 
 // --- MIDDLEWARES ---
@@ -118,6 +140,191 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({ user });
   } catch (error) {
     console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- PASSWORD RESET ---
+app.post('/api/auth/request-password-reset', async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+  
+  try {
+    // Check if user exists
+    const result = await pool.query('SELECT id, firstname, lastname FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      // Don't reveal if email exists or not for security
+      return res.json({ message: 'If an account with this email exists, password reset instructions have been sent.' });
+    }
+    
+    const user = result.rows[0];
+    
+    // Generate a simple reset token (in production, use crypto.randomBytes)
+    const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const resetExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+    
+    // Store reset token in database
+    await pool.query(
+      'UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3',
+      [resetToken, resetExpiry, user.id]
+    );
+    
+    // Generate reset URL with email parameter
+    const resetUrl = `${process.env.APP_URL || 'http://localhost:8000'}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+    
+    // Log reset information for debugging
+    console.log(`🔑 Password reset requested for ${email}`);
+    console.log(`🔑 Reset token: ${resetToken}`);
+    console.log(`🔑 Reset URL: ${resetUrl}`);
+    
+    // Send email with reset link
+    try {
+      const transporter = createEmailTransporter();
+      
+      const mailOptions = {
+        from: process.env.SMTP_FROM_PROD || process.env.SMTP_USER,
+        to: email,
+        subject: 'Réinitialisation de votre mot de passe - Candidater en France Facile',
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Réinitialisation de mot de passe</title>
+          </head>
+          <body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: Arial, sans-serif;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #333; margin: 0;">Candidater en France Facile</h1>
+              </div>
+              
+              <h2 style="color: #333; margin-bottom: 20px;">Réinitialisation de votre mot de passe</h2>
+              
+              <p style="color: #555; line-height: 1.6;">Bonjour ${user.firstname} ${user.lastname},</p>
+              
+              <p style="color: #555; line-height: 1.6;">
+                Vous avez demandé la réinitialisation de votre mot de passe pour votre compte Candidater en France Facile.
+              </p>
+              
+              <p style="color: #555; line-height: 1.6;">
+                Cliquez sur le bouton ci-dessous pour définir un nouveau mot de passe :
+              </p>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${resetUrl}" 
+                   style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                  Réinitialiser mon mot de passe
+                </a>
+              </div>
+              
+              <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 15px; margin: 20px 0;">
+                <p style="margin: 0; color: #856404; font-size: 14px;">
+                  ⚠️ <strong>Important :</strong> Ce lien expirera dans 1 heure pour votre sécurité.
+                </p>
+              </div>
+              
+              <p style="color: #555; line-height: 1.6; font-size: 14px;">
+                Si vous n'avez pas demandé cette réinitialisation, vous pouvez ignorer cet email en toute sécurité.
+              </p>
+              
+              <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+              
+              <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                <p style="margin: 0; font-size: 12px; color: #666; line-height: 1.4;">
+                  <strong>Le bouton ne fonctionne pas ?</strong><br>
+                  Copiez et collez ce lien dans votre navigateur :<br>
+                  <span style="word-break: break-all; color: #007bff;">${resetUrl}</span>
+                </p>
+              </div>
+              
+              <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                <p style="margin: 0; font-size: 12px; color: #999;">
+                  © ${new Date().getFullYear()} Candidater en France Facile. Tous droits réservés.
+                </p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        text: `
+Réinitialisation de votre mot de passe - Candidater en France Facile
+
+Bonjour ${user.firstname} ${user.lastname},
+
+Vous avez demandé la réinitialisation de votre mot de passe pour votre compte Candidater en France Facile.
+
+Cliquez sur ce lien pour définir un nouveau mot de passe :
+${resetUrl}
+
+Ce lien expirera dans 1 heure.
+
+Si vous n'avez pas demandé cette réinitialisation, vous pouvez ignorer cet email.
+
+---
+© ${new Date().getFullYear()} Candidater en France Facile
+        `
+      };
+      
+      // Verify transporter configuration before sending
+      await transporter.verify();
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Password reset email sent to ${email}`);
+      
+    } catch (emailError) {
+      console.error('❌ Error sending email:', emailError.message);
+      console.log(`🔑 EMAIL FAILED - Use this URL manually: ${resetUrl}`);
+      
+      // Don't fail the request if email fails - user can still use the URL from logs
+      if (process.env.NODE_ENV === 'production') {
+        console.error('🚨 PRODUCTION: Email service failed, check SMTP configuration');
+      }
+    }
+    
+    res.json({ 
+      message: 'If an account with this email exists, password reset instructions have been sent.',
+      // In development, include the token for testing
+      ...(process.env.NODE_ENV === 'development' && { resetToken, resetUrl })
+    });
+    
+  } catch (error) {
+    console.error('Password reset error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword) {
+    return res.status(400).json({ error: 'Token and new password are required' });
+  }
+  
+  try {
+    // Find user with valid reset token
+    const result = await pool.query(
+      'SELECT id FROM users WHERE reset_token = $1 AND reset_token_expiry > NOW()',
+      [token]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+    
+    const userId = result.rows[0].id;
+    
+    // Hash new password and update user
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    await pool.query(
+      'UPDATE users SET password = $1, reset_token = NULL, reset_token_expiry = NULL, updated_at = NOW() WHERE id = $2',
+      [hashedPassword, userId]
+    );
+    
+    res.json({ message: 'Password has been reset successfully' });
+    
+  } catch (error) {
+    console.error('Password reset completion error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
