@@ -88,15 +88,15 @@ export const useCandidates = () => {
       if (!candidate) {
         throw new Error('Candidat non trouvé');
       }
-      const current_stage = String(newStage);
-      console.log('[updateCandidateStage] PATCH /api/candidates/' + candidateId, { current_stage });
+      const stageId = String(newStage);
+      console.log('[updateCandidateStage] PATCH /api/candidates/' + candidateId + '/stage', { stageId });
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/candidates/${candidateId}/stage`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ current_stage })
+        body: JSON.stringify({ stageId })
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -105,13 +105,16 @@ export const useCandidates = () => {
       }
       const data = await response.json();
       console.log('[updateCandidateStage] Success:', data);
+      
+      // Mise à jour silencieuse de l'état local avec les données du serveur
       setCandidates(prevCandidates => 
         prevCandidates.map(c => 
           c.id === candidateId 
-            ? { ...c, current_stage }
+            ? { ...c, current_stage: data.current_stage }
             : c
         )
       );
+      
       toast({
         title: "Stage mis à jour",
         description: "Le stage du candidat a été mis à jour avec succès",

@@ -80,28 +80,12 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate, onUpdate }: Candida
     }
   }, [candidate]);
 
-  const handleStageChange = (candidateId: string | number, newStage: string) => {
-    const candidateIdNum = typeof candidateId === 'string' ? parseInt(candidateId, 10) : candidateId;
-    const stageNumber = parseInt(newStage, 10);
-    
-    if (!isNaN(candidateIdNum) && !isNaN(stageNumber)) {
-      setFormData(prev => ({
-        ...prev,
-        current_stage: newStage
-      }));
-      
-      // Mettre à jour l'étape du candidat via l'API
-      updateCandidateStage(candidateIdNum, stageNumber).catch(error => {
-        console.error('Error updating candidate stage:', error);
-        toast({
-          title: "Error",
-          description: "Failed to update candidate stage",
-          variant: "destructive",
-        });
-      });
-    } else {
-      console.error('Invalid stage or candidate ID:', { newStage, candidateId });
-    }
+  const handleStageChange = (newStage: string) => {
+    // Juste mettre à jour le formulaire local, pas d'appel API
+    setFormData(prev => ({
+      ...prev,
+      current_stage: newStage
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -303,7 +287,7 @@ const CandidateDetailsModal = ({ isOpen, onClose, candidate, onUpdate }: Candida
                   <Label htmlFor="stage">Current stage</Label>
                   <Select
                     value={formData.current_stage}
-                    onValueChange={(value) => handleStageChange(candidate.id, value)}
+                    onValueChange={(value) => handleStageChange(value)}
                     disabled={stagesLoading}
                   >
                     <SelectTrigger>

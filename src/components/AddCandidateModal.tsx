@@ -84,16 +84,17 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Add a new candidate</DialogTitle>
           <DialogDescription>
             Fill in the candidate's information and upload their CV
           </DialogDescription>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-4 py-4">
+        <div className="flex-1 overflow-y-auto pr-2">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="name" className="text-right">
                 Full name
@@ -176,45 +177,46 @@ const AddCandidateModal = ({ isOpen, onClose }: AddCandidateModalProps) => {
                 min="0"
               />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="cv">CV (PDF)</Label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-              <input
-                id="cv"
-                type="file"
-                accept=".pdf"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <label htmlFor="cv" className="cursor-pointer">
-                {formData.cv ? (
-                  <div className="flex items-center justify-center gap-2 text-green-600">
-                    <FileText className="w-6 h-6" />
-                    <span>{formData.cv.name}</span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-2">
-                    <Upload className="w-8 h-8 text-gray-400" />
-                    <span className="text-sm text-gray-600">
-                      Cliquez pour uploader le CV (PDF uniquement)
-                    </span>
-                  </div>
-                )}
-              </label>
             </div>
-          </div>
 
-          <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Annuler
-            </Button>
-            <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-              Ajouter le candidat
-            </Button>
-          </div>
-        </form>
+            <div className="space-y-2">
+              <Label htmlFor="cv">CV (PDF)</Label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                <input
+                  id="cv"
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <label htmlFor="cv" className="cursor-pointer">
+                  {formData.cv ? (
+                    <div className="flex items-center justify-center gap-2 text-green-600">
+                      <FileText className="w-5 h-5" />
+                      <span className="text-sm">{formData.cv.name}</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload className="w-6 h-6 text-gray-400" />
+                      <span className="text-xs text-gray-600">
+                        Cliquez pour uploader le CV (PDF uniquement)
+                      </span>
+                    </div>
+                  )}
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-6 pb-2">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Annuler
+              </Button>
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                Ajouter le candidat
+              </Button>
+            </div>
+          </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

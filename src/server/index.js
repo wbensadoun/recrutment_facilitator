@@ -155,6 +155,8 @@ app.post('/api/auth/request-password-reset', async (req, res) => {
     // Check if user exists
     const result = await pool.query('SELECT id, firstname, lastname FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) {
+      // Log for debugging even when user doesn't exist
+      console.log(`🔑 Password reset requested for ${email} - USER NOT FOUND`);
       // Don't reveal if email exists or not for security
       return res.json({ message: 'If an account with this email exists, password reset instructions have been sent.' });
     }
@@ -276,6 +278,8 @@ Si vous n'avez pas demandé cette réinitialisation, vous pouvez ignorer cet ema
     } catch (emailError) {
       console.error('❌ Error sending email:', emailError.message);
       console.log(`🔑 EMAIL FAILED - Use this URL manually: ${resetUrl}`);
+      console.log(`🔑 ⚠️  COPY THIS RESET URL: ${resetUrl}`);
+      console.log(`🔑 📧 Email would have been sent to: ${email}`);
       
       // Don't fail the request if email fails - user can still use the URL from logs
       if (process.env.NODE_ENV === 'production') {
@@ -481,8 +485,8 @@ app.put('/api/candidates/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
-  if (!status) {
-    return res.status(400).json({ error: 'Status is required.' });
+  if (!['in_progress', 'hired', 'rejected'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
   }
 
   try {
@@ -492,13 +496,45 @@ app.put('/api/candidates/:id/status', async (req, res) => {
     );
 
     if (!updatedCandidate) {
-      return res.status(404).json({ error: 'Candidate not found.' });
+      return res.status(404).json({ error: 'Candidate not found' });
     }
 
-    res.status(200).json(updatedCandidate);
+    res.json(updatedCandidate);
   } catch (error) {
     console.error('Error updating candidate status:', error);
     res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.patch('/api/candidates/:id/stage', async (req, res) => {
+  const { id } = req.params;
+  const { stageId } = req.body;
+
+  if (!stageId) {
+    return res.status(400).json({ error: 'Stage ID is required' });
+  }
+
+  try {
+    // Verify stage exists
+    const stageResult = await pool.query('SELECT id FROM pipeline_stages WHERE id = $1', [stageId]);
+    if (stageResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid stage ID' });
+    }
+
+    // Update candidate stage
+    const { rows: [updatedCandidate] } = await pool.query(
+      'UPDATE candidates SET current_stage = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [stageId, id]
+    );
+
+    if (!updatedCandidate) {
+      return res.status(404).json({ error: 'Candidate not found' });
+    }
+
+    res.json(updatedCandidate);
+  } catch (error) {
+    console.error('Error updating candidate stage:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -722,6 +758,41 @@ app.put('/api/user/change-password', async (req, res) => {
   } catch (error) {
     console.error('Error changing password:', error);
     res.status(500).json({ message: 'Internal server error.' });
+  }
+});
+
+// --- ADMIN RECRUITER PASSWORD UPDATE ---
+app.put('/api/admin/recruiter/password', async (req, res) => {
+  const { recruiterId, newPassword } = req.body;
+  if (!recruiterId || !newPassword) {
+    return res.status(400).json({ error: 'Recruiter ID and new password are required.' });
+  }
+  
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+  }
+  
+  try {
+    // Verify recruiter exists and has recruiter role
+    const recruiterCheck = await pool.query('SELECT id, role FROM users WHERE id = $1 AND role = $2', [recruiterId, 'recruiter']);
+    if (recruiterCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Recruiter not found.' });
+    }
+    
+    const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+    const result = await pool.query(
+      'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2 AND role = $3 RETURNING id', 
+      [hashedNewPassword, recruiterId, 'recruiter']
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recruiter not found.' });
+    }
+    
+    res.json({ success: true, message: 'Recruiter password updated successfully.' });
+  } catch (error) {
+    console.error('Error updating recruiter password:', error);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

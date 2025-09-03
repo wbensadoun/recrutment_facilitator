@@ -6,10 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Users, UserPlus, Settings, Trash2, Edit } from 'lucide-react';
+import { Users, UserPlus, Settings, Trash2, Edit, Eye } from 'lucide-react';
 import { useRecruiters } from '@/hooks/useRecruiters';
 import { format } from 'date-fns';
 import ConfigurationModal from './ConfigurationModal';
+import RecruiterDetailsModal from './RecruiterDetailsModal';
 
 const AdminDashboard = () => {
 
@@ -22,6 +23,8 @@ const AdminDashboard = () => {
   });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedRecruiter, setSelectedRecruiter] = useState<Recruiter | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const handleAddRecruiter = async (e: React.FormEvent) => {
@@ -56,6 +59,34 @@ const AdminDashboard = () => {
   const handleDeleteRecruiter = async (id: number) => {
     if (window.confirm('Are you sure you want to delete this recruiter?')) {
       await deleteRecruiter(id);
+    }
+  };
+
+  const handleShowDetails = (recruiter: Recruiter) => {
+    setSelectedRecruiter(recruiter);
+    setIsDetailsModalOpen(true);
+  };
+
+  const handlePasswordUpdate = async (recruiterId: number, newPassword: string) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/recruiter/password`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ recruiterId, newPassword }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update password');
+      }
+
+      const result = await response.json();
+      console.log('Password updated successfully:', result.message);
+    } catch (error) {
+      console.error('Error updating recruiter password:', error);
+      throw error;
     }
   };
 
@@ -215,6 +246,15 @@ const AdminDashboard = () => {
                       <Button 
                         variant="outline" 
                         size="sm"
+                        onClick={() => handleShowDetails(recruiter)}
+                        className="text-blue-600 hover:text-blue-700"
+                      >
+                        <Eye className="w-4 h-4 mr-1" />
+                        Détails
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
                         onClick={() => handleToggleStatus(recruiter)}
                       >
                         {recruiter.status === 'active' ? 'Disable' : 'Enable'}
@@ -244,6 +284,17 @@ const AdminDashboard = () => {
       <ConfigurationModal 
         isOpen={isConfigModalOpen}
         onClose={() => setIsConfigModalOpen(false)}
+      />
+
+      {/* Recruiter Details Modal */}
+      <RecruiterDetailsModal
+        recruiter={selectedRecruiter}
+        isOpen={isDetailsModalOpen}
+        onClose={() => {
+          setIsDetailsModalOpen(false);
+          setSelectedRecruiter(null);
+        }}
+        onPasswordUpdate={handlePasswordUpdate}
       />
     </div>
   );
